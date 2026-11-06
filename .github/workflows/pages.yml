@@ -67,5 +67,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
-      - id: deployment
+      # GitHub can still be finishing the previous publish (e.g. a test-branch update a minute earlier),
+      # which makes this step fail with "in progress deployment". Wait and try again rather than fail.
+      - id: first
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait for the previous publish to finish
+        if: steps.first.outcome == 'failure'
+        run: sleep 90
+      - id: second
+        if: steps.first.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+      - id: deployment
+        run: echo "page_url=${{ steps.second.outputs.page_url || steps.first.outputs.page_url }}" >> "$GITHUB_OUTPUT"
