@@ -8,7 +8,7 @@ A web app (installable on a tablet or phone) for a one-of-each Pokédex card col
 - **Language tag** (EN / JP / KR) on each card, so each card appears once instead of three times.
 - **Up to 3 ranked upgrades** per Pokémon, with "Got it!" to promote an upgrade to the owned card (with undo).
 - **Typical recent price** for every card (Cardmarket 30-day average and TCGplayer market price, refreshed daily),
-  optionally converted to £/€/$, plus links to eBay sold listings.
+  shown in £ by default (converted from Cardmarket's euro prices), plus links to eBay sold listings.
 - **Shop list** of every planned upgrade, sortable by set or rarity, a "Price check any card" search,
   and the list of still-missing Pokémon.
 - **Works offline** once opened (handy in shops), plus backup/restore to a file.
@@ -38,12 +38,8 @@ Then open http://localhost:8080.
 
 ## Hosting
 
-The app is static files only, so any static host works:
-
-- **GitHub Pages:** `.github/workflows/pages.yml` deploys on every push to `main`. In the repo go to
-  *Settings → Pages → Source: GitHub Actions*. Pages on a **private** repo needs a paid GitHub plan;
-  otherwise make the repo public (it contains no secrets) or use one of the hosts below.
-- **Netlify / Cloudflare Pages:** connect the repo (private repos are fine on their free plans), with no build command and the repo root as the publish directory.
+The app is static files only. `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to `main`
+(one-off: repo *Settings → Pages → Source: GitHub Actions*). It will be at https://jaygit88.github.io/pokeapp/.
 
 When you change files, bump `VERSION` in `sw.js` so installed copies pick up the update.
 

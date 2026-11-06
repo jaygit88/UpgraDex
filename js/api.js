@@ -191,6 +191,9 @@ export async function getPrices(id) {
 
 // ---------- Currency conversion (optional) ----------
 
+// Used only if the rate service can't be reached and nothing is saved yet (rates from Nov 2026).
+const FALLBACK_RATES = { EUR: 1, GBP: 0.834, USD: 1.122, AUD: 1.72, CAD: 1.57, NZD: 1.95 };
+
 let ratesPromise = null;
 export function getRates() {
   if (ratesPromise) return ratesPromise;
@@ -200,13 +203,15 @@ export function getRates() {
       if (c && Date.now() - c.t < 24 * 3600e3) return c.rates;
     } catch {}
     try {
-      const r = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD,GBP,AUD,CAD,NZD');
+      const r = await fetch('https://api.frankfurter.dev/v1/latest?from=EUR&to=USD,GBP,AUD,CAD,NZD');
+      if (!r.ok) throw new Error('rates');
       const j = await r.json();
       const rates = { EUR: 1, ...j.rates };
       try { localStorage.setItem('pu:rates', JSON.stringify({ t: Date.now(), rates })); } catch {}
       return rates;
     } catch {
-      try { return JSON.parse(localStorage.getItem('pu:rates') || 'null')?.rates || null; } catch { return null; }
+      try { const c = JSON.parse(localStorage.getItem('pu:rates') || 'null'); if (c?.rates) return c.rates; } catch {}
+      return FALLBACK_RATES;
     }
   })();
   return ratesPromise;

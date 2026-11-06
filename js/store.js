@@ -115,17 +115,17 @@ export function sameCard(a, b) {
 
 // ---------- Settings (per device, not synced) ----------
 
+// UK defaults: Cardmarket (the European market) converted to pounds.
 function defaultSettings() {
-  const loc = (navigator.language || 'en-GB').toUpperCase();
-  const region = loc.split('-')[1] || '';
-  const currency = { GB: 'GBP', US: 'USD', AU: 'AUD', CA: 'CAD', NZ: 'NZD', IE: 'EUR' }[region] || 'native';
-  const priceSource = ['US', 'CA'].includes(region) ? 'tcgplayer' : 'cardmarket';
-  return { priceSource, currency, fastSetup: false, defaultLang: 'EN', sync: null };
+  return { v: 2, priceSource: 'cardmarket', currency: 'GBP', fastSetup: false, defaultLang: 'EN', sync: null };
 }
 
 let settings = defaultSettings();
 try {
-  settings = { ...settings, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')) };
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  // Settings saved by the first version guessed the currency from the device language; switch them to GBP.
+  if (!saved.v) { delete saved.currency; delete saved.priceSource; }
+  settings = { ...settings, ...saved, v: 2 };
 } catch {}
 const settingsListeners = new Set();
 

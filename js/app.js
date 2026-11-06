@@ -661,8 +661,8 @@ function SettingsScreen() {
       </label>
       <label>Show prices in
         <select value=${settings.currency} onChange=${(e) => store.updateSettings({ currency: e.currentTarget.value })}>
-          <option value="native">Original currency (€ / $)</option>
           <option value="GBP">£ British pounds (converted)</option>
+          <option value="native">Original currency (€ / $)</option>
           <option value="EUR">€ Euros (converted)</option>
           <option value="USD">$ US dollars (converted)</option>
           <option value="AUD">$ Australian dollars (converted)</option>
@@ -716,11 +716,7 @@ function SettingsScreen() {
 
     <section>
       <h2>Install on a tablet or phone</h2>
-      <ul class="small">
-        <li><b>iPad / iPhone (Safari):</b> tap Share <span aria-hidden="true">⎋</span> → <i>Add to Home Screen</i>.</li>
-        <li><b>Android (Chrome):</b> tap ⋮ → <i>Add to Home screen</i> / <i>Install app</i>.</li>
-      </ul>
-      <p class="muted small">Installing keeps the data safe — Safari can clear saved data for websites you haven't opened in a while, but not for installed apps.</p>
+      <p class="small">In Chrome, tap <b>⋮</b> (top right) → <i>Add to Home screen</i> → <i>Install</i>. It then opens like a normal app, full screen.</p>
     </section>
 
     <section>

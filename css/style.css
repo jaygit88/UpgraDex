@@ -293,3 +293,8 @@ label.check input { width: 22px; height: 22px; }
   .up-slot .rank { position: absolute; margin: -16px 0 0 -16px; width: 26px; height: 26px; font-size: .85rem; }
   .slot { position: relative; }
 }
+@media (max-width: 699px) {
+  .sheet-img .card-img { width: auto; max-width: 100%; max-height: 38dvh; }
+  .sheet-img .card-img.placeholder { width: 60%; }
+  .sheet-body { gap: 12px; }
+}
