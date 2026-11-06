@@ -156,7 +156,7 @@ export function exportJSON() {
 
 export function parseImport(text) {
   const j = JSON.parse(text);
-  if (!j || typeof j.entries !== 'object') throw new Error('That file is not a Dex Upgrades backup.');
+  if (!j || typeof j.entries !== 'object') throw new Error('That file is not a UpgraDex backup.');
   return j.entries;
 }
 

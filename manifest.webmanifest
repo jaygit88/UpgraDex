@@ -1,6 +1,6 @@
 {
-  "name": "Dex Upgrades",
-  "short_name": "Dex Upgrades",
+  "name": "UpgraDex",
+  "short_name": "UpgraDex",
   "description": "Track a one-of-each Pokédex card collection and plan the upgrades.",
   "start_url": "./#/",
   "scope": "./",

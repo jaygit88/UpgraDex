@@ -541,7 +541,7 @@ function SyncGuide() {
   return html`<details>
     <summary><b>How to set up Firebase</b> (free, grown-up job)</summary>
     <ol class="small guide">
-      <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a>, sign in with a Google account and click <i>Create a project</i> (name it e.g. “dex-upgrades”; Google Analytics can be turned off).</li>
+      <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a>, sign in with a Google account and click <i>Create a project</i> (name it e.g. “upgradex”; Google Analytics can be turned off).</li>
       <li>In the left menu choose <i>Build → Firestore Database → Create database</i>. Pick a location near you and start in <i>production mode</i>.</li>
       <li>Open the <i>Rules</i> tab, replace everything with the rules below and click <i>Publish</i>.
         <pre>${RULES}</pre>
@@ -590,7 +590,7 @@ function SettingsScreen() {
   const shareLink = async () => {
     const link = sync.joinLink(settings.sync);
     if (navigator.share) {
-      try { await navigator.share({ title: 'Dex Upgrades', text: 'Open this to see the Pokémon collection on this device', url: link }); return; } catch {}
+      try { await navigator.share({ title: 'UpgraDex', text: 'Open this to see the Pokémon collection on this device', url: link }); return; } catch {}
     }
     try { await navigator.clipboard.writeText(link); toast({ msg: 'Link copied – send it to the other device' }); }
     catch { prompt('Copy this link and open it on the other device:', link); }
@@ -613,7 +613,7 @@ function SettingsScreen() {
 
   const exportFile = async () => {
     const text = store.exportJSON();
-    const name = `dex-upgrades-${new Date().toISOString().slice(0, 10)}.json`;
+    const name = `upgradex-${new Date().toISOString().slice(0, 10)}.json`;
     const file = new File([text], name, { type: 'application/json' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: name }); return; } catch {}
@@ -890,7 +890,7 @@ function App() {
   const tab = route.name === 'shop' ? 'shop' : route.name === 'settings' ? 'settings' : 'dex';
   return html`<div class="app">
     <header class="top">
-      <a class="brand" href="#/"><span class="ball" aria-hidden="true"></span>Dex Upgrades</a>
+      <a class="brand" href="#/"><span class="ball" aria-hidden="true"></span>UpgraDex</a>
       <${SyncStatusDot} />
     </header>
     <div class="screens">

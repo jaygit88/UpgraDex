@@ -1,4 +1,4 @@
-# Dex Upgrades
+# UpgraDex
 
 A web app (installable on a tablet or phone) for a one-of-each Pokédex card collection:
 

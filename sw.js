@@ -1,5 +1,5 @@
 // Service worker: keeps the app working offline (e.g. in a shop with bad signal).
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL = `shell-${VERSION}`;
 const SPRITES = 'sprites-v1';
 const SDK = 'sdk-v1';
