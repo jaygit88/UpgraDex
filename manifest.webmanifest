@@ -2,7 +2,7 @@
   "name": "UpgraDex",
   "short_name": "UpgraDex",
   "description": "Track a one-of-each Pokédex card collection and plan the upgrades.",
-  "id": "/UpgraDex/",
+  "id": "/UpgraDex/app/",
   "start_url": "./index.html#/",
   "scope": "./",
   "display": "standalone",
