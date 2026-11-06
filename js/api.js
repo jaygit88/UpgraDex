@@ -177,13 +177,15 @@ export function peekPrices(id) {
   return priceMemory.get(id);
 }
 
-export async function getPrices(id) {
+// maxAge: how old a saved price may be. Totals (collection value, budget) accept older prices
+// so they don't refetch hundreds of cards every visit.
+export async function getPrices(id, { maxAge = PRICE_TTL } = {}) {
   if (!id) return null;
   const mem = priceMemory.get(id);
-  if (mem && Date.now() - mem.t < PRICE_TTL) return mem;
+  if (mem && Date.now() - mem.t < maxAge) return mem;
   const key = `price:v1:${id}`;
   const cached = await idbGet(key);
-  if (cached && Date.now() - cached.t < PRICE_TTL) { priceMemory.set(id, cached); return cached; }
+  if (cached && Date.now() - cached.t < maxAge) { priceMemory.set(id, cached); return cached; }
   try {
     const value = await enqueue(async () => {
       const r = await fetch(`${BASE}/en/cards/${encodeURIComponent(id)}`);
@@ -198,6 +200,21 @@ export async function getPrices(id) {
     if (cached) { const v = { ...cached, stale: true }; priceMemory.set(id, v); return v; }
     throw e;
   }
+}
+
+export const BULK_PRICE_AGE = 3 * 24 * 3600e3;
+
+// Prices for many cards, reporting progress as they arrive. Cards without a price are left out.
+export async function getManyPrices(ids, onProgress) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const out = new Map();
+  let done = 0;
+  await Promise.all(unique.map(async (id) => {
+    try { out.set(id, await getPrices(id, { maxAge: BULK_PRICE_AGE })); } catch {}
+    done++;
+    if (onProgress) onProgress(done, unique.length);
+  }));
+  return out;
 }
 
 // ---------- Currency conversion (optional) ----------

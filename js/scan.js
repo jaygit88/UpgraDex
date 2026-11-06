@@ -11,6 +11,9 @@ import * as store from './store.js';
 import { IS_TEST } from './env.js';
 import { SCANNER_SUBDOMAIN } from './config.js';
 import { openSheet, toast, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName } from './app.js';
+import { VerdictBanner } from './verdict.js';
+import { BinderSpot } from './binder.js';
+import { TradeCheck } from './trade.js';
 
 // ---------- Talking to the scanner ----------
 
@@ -20,10 +23,10 @@ export function scannerUrl(settings) {
   return `https://upgradex-scanner${IS_TEST ? '-test' : ''}.${SCANNER_SUBDOMAIN}.workers.dev`;
 }
 
-const MAX_EDGE = { quick: 1568, catalog: 2576 };
+export const MAX_EDGE = { quick: 1568, catalog: 2576 };
 
 // Shrink the photo before sending: smaller uploads, lower cost, still sharp enough to read.
-async function shrink(file, maxEdge) {
+export async function shrink(file, maxEdge) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
@@ -42,7 +45,7 @@ async function shrink(file, maxEdge) {
   return { base64: String(dataUrl).split(',')[1], preview: URL.createObjectURL(blob) };
 }
 
-async function callScanner(settings, body) {
+export async function callScanner(settings, body) {
   const url = scannerUrl(settings);
   let r;
   try {
@@ -100,14 +103,14 @@ export function rankCards(det, cards) {
   return { best: top && top.s >= 4 ? top.c : null, candidates: scored.map((x) => x.c), sure };
 }
 
-async function matchDetection(det) {
+export async function matchDetection(det) {
   const p = findPokemon(det);
   if (!p) return { det, p: null, best: null, candidates: [], sure: false };
   const { cards, error } = await getCardsFor(p.dex, p.name);
   return { det, p, loadError: cards.length ? null : error || `No ${p.name} cards found in the card database.`, ...rankCards(det, cards) };
 }
 
-const langOf = (det) => (['EN', 'JP', 'KR'].includes(det.language) ? det.language : 'EN');
+export const langOf = (det) => (['EN', 'JP', 'KR'].includes(det.language) ? det.language : 'EN');
 
 function readLine(det) {
   const num = det.number ? `#${det.number}${det.set_total ? '/' + det.set_total : ''}` : '';
@@ -158,6 +161,13 @@ export function ScanScreen() {
         </div>
       </section>
       <section class="scan-mode">
+        <h2>Trade check</h2>
+        <p class="muted small">Swapping with a friend? Add both sides' cards to see if it's a fair trade — and whether their cards are upgrades for him.</p>
+        <div class="row-wrap">
+          <button class="btn primary" onClick=${() => setState({ phase: 'trade' })}>Check a trade</button>
+        </div>
+      </section>
+      <section class="scan-mode">
         <h2>Catalogue a binder page</h2>
         <p class="muted small">Photograph a whole page (up to 9 cards) and save them all as his cards. Uses the more careful reader.</p>
         <div class="row-wrap">
@@ -175,6 +185,8 @@ export function ScanScreen() {
       <p>${state.mode === 'quick' ? 'Reading the card…' : 'Reading the page… this takes a few seconds'}</p>
     </div>`}
 
+    ${state.phase === 'trade' && html`<${TradeCheck} ready=${ready} onDone=${() => setState({ phase: 'idle' })} />`}
+
     ${state.phase === 'quick' && html`<${QuickResult} key=${state.key} matches=${state.matches} preview=${state.preview}
       onAgain=${() => pick('quick')} onDone=${() => setState({ phase: 'idle' })} />`}
 
@@ -183,16 +195,7 @@ export function ScanScreen() {
   </div>`;
 }
 
-function statusLine(dex, card) {
-  const e = store.getEntry(dex);
-  if (e.owned && store.sameCard(e.owned, card)) return html`<span class="badge ok-badge">✓ This is his card</span>`;
-  const up = e.ups.findIndex((u) => store.sameCard(u, card));
-  if (up >= 0) return html`<span class="badge up-badge">⬆ Upgrade #${up + 1} on his list</span>`;
-  if (!e.owned) return html`<span class="badge missing-badge">He's missing ${speciesName(dex)}!</span>`;
-  return null;
-}
-
-function Candidates({ m, chosen, onChoose }) {
+export function Candidates({ m, chosen, onChoose }) {
   const list = m.candidates.slice(0, 24);
   if (!list.length) return null;
   return html`<div class="cand-strip" role="list">
@@ -240,6 +243,9 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
 
     ${!m.p && html`<p class="error">Couldn't tell which Pokémon this is. Try a clearer photo.</p>`}
 
+    ${m.p && chosen && html`<${VerdictBanner} dex=${m.p.dex} card=${chosen} lang=${lang} />
+      <${BinderSpot} dex=${m.p.dex} compact />`}
+
     ${m.p && chosen && html`<div class="sheet-body">
       <div class="sheet-img"><${CardImage} card=${chosen} q="high" /></div>
       <div class="sheet-info">
@@ -248,8 +254,8 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
         <div class="row-wrap">
           ${m.sure && chosen === m.best ? html`<span class="badge ok-badge">✓ Matched</span>` : html`<span class="badge">Best guess – check it's the same picture</span>`}
           <${LangBadge} lang=${lang} />
-          ${statusLine(m.p.dex, chosen)}
         </div>
+
         <div class="row-wrap actions">
           <button class="btn primary" onClick=${() => openSheet({ kind: 'pick', dex: m.p.dex, card: chosen, purpose: 'up', lang })}>Add or save…</button>
           <button class="btn" onClick=${onAgain}><${Icon} name="camera" /> Scan another</button>
@@ -339,6 +345,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
                 ${r.chosen && (m.sure && r.chosen === m.best ? html`<span class="badge ok-badge">✓ Matched</span>` : html`<span class="badge">Check this one</span>`)}
                 ${r.chosen && html`<${RarityChip} rarity=${r.chosen.rarity} short />`}
               </div>
+              ${m.p && html`<${BinderSpot} dex=${m.p.dex} compact />`}
               <${LangPicker} value=${r.lang} onChange=${(l) => update(i, { lang: l, action: r.action === 'have' ? 'save' : r.action })} />
               ${m.p && !r.chosen && (r.action === 'marked'
                 ? html`<div class="small ok-text">✓ Marked as owned – pick the exact card later</div>`
