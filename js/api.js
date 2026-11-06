@@ -86,20 +86,31 @@ async function fetchCardsFor(dex, speciesName) {
 const inflight = new Map();
 
 // Returns { cards, stale, error }. Uses a cached copy when offline.
+// One retry after a short pause covers brief connection hiccups (common on shop Wi-Fi).
+async function fetchWithRetry(dex, speciesName) {
+  try {
+    return await fetchCardsFor(dex, speciesName);
+  } catch (e) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return fetchCardsFor(dex, speciesName);
+  }
+}
+
 export async function getCardsFor(dex, speciesName, { force = false } = {}) {
   const key = `cards:v1:${dex}`;
   const cached = await idbGet(key);
-  if (cached && !force && Date.now() - cached.t < CARDS_TTL) return { cards: cached.cards };
+  const usable = cached && cached.cards && cached.cards.length > 0; // never trust a saved empty list
+  if (usable && !force && Date.now() - cached.t < CARDS_TTL) return { cards: cached.cards };
   if (!inflight.has(key)) {
-    inflight.set(key, fetchCardsFor(dex, speciesName).finally(() => inflight.delete(key)));
+    inflight.set(key, fetchWithRetry(dex, speciesName).finally(() => inflight.delete(key)));
   }
   try {
     const cards = await inflight.get(key);
-    await idbSet(key, { t: Date.now(), cards });
+    if (cards.length) await idbSet(key, { t: Date.now(), cards });
     return { cards };
   } catch (e) {
-    if (cached) return { cards: cached.cards, stale: true };
-    return { cards: [], error: e.message || 'Could not load cards' };
+    if (usable) return { cards: cached.cards, stale: true };
+    return { cards: [], error: "Couldn't reach the card database – check your connection and try again." };
   }
 }
 

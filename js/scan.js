@@ -103,8 +103,8 @@ export function rankCards(det, cards) {
 async function matchDetection(det) {
   const p = findPokemon(det);
   if (!p) return { det, p: null, best: null, candidates: [], sure: false };
-  const { cards } = await getCardsFor(p.dex, p.name);
-  return { det, p, ...rankCards(det, cards) };
+  const { cards, error } = await getCardsFor(p.dex, p.name);
+  return { det, p, loadError: cards.length ? null : error || `No ${p.name} cards found in the card database.`, ...rankCards(det, cards) };
 }
 
 const langOf = (det) => (['EN', 'JP', 'KR'].includes(det.language) ? det.language : 'EN');
@@ -203,11 +203,28 @@ function Candidates({ m, chosen, onChoose }) {
   </div>`;
 }
 
+function LoadProblem({ m, onRetry }) {
+  const [busy, setBusy] = useState(false);
+  return html`<div class="callout">
+    <b>${m.loadError}</b>
+    <div class="row-wrap">
+      <button class="btn primary" disabled=${busy} onClick=${async () => { setBusy(true); await onRetry(); setBusy(false); }}>${busy ? 'Trying…' : 'Try again'}</button>
+      <a class="btn" href=${`#/p/${m.p.dex}/cards`}>Browse all ${m.p.name} cards</a>
+    </div>
+  </div>`;
+}
+
 function QuickResult({ matches, preview, onAgain, onDone }) {
   store.useCollection();
-  const m = matches[0];
+  const [m, setM] = useState(matches[0]);
   const [chosen, setChosen] = useState(m?.best || null);
   const [showAll, setShowAll] = useState(!m?.best);
+  const retry = async () => {
+    const again = await matchDetection(m.det);
+    setM(again);
+    setChosen(again.best || null);
+    setShowAll(!again.best);
+  };
 
   if (!m) {
     return html`<div class="scan-result">
@@ -241,11 +258,14 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
       </div>
     </div>`}
 
-    ${m.p && !chosen && html`<p>Couldn't find the exact card — pick it below.</p>`}
+    ${m.p && m.loadError && html`<${LoadProblem} m=${m} onRetry=${retry} />`}
 
-    ${m.p && html`<details class="cand-box" open=${showAll} onToggle=${(e) => setShowAll(e.currentTarget.open)}>
+    ${m.p && !m.loadError && !chosen && html`<p>Couldn't find the exact card — pick it below.</p>`}
+
+    ${m.p && !m.loadError && html`<details class="cand-box" open=${showAll} onToggle=${(e) => setShowAll(e.currentTarget.open)}>
       <summary><b>Not the right card?</b> Choose from ${m.candidates.length} ${m.p.name} cards</summary>
       <${Candidates} m=${m} chosen=${chosen} onChoose=${(c) => { setChosen(c); setShowAll(false); }} />
+      <p class="small"><a href=${`#/p/${m.p.dex}/cards`}>Open the full ${m.p.name} card list</a></p>
     </details>`}
 
     <p><button class="btn" onClick=${onDone}>Done</button></p>
@@ -309,7 +329,11 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
             </button>
             <div class="grow">
               <div>${m.p ? html`<span class="muted">${pad(m.p.dex)}</span> <b>${m.p.name}</b>` : html`<b>Unknown card</b>`}</div>
-              <div class="small">${r.chosen ? setLine(r.chosen) : 'Not matched – tap the picture to choose'}</div>
+              <div class="small">${r.chosen ? setLine(r.chosen) : m.loadError ? html`<span class="error">${m.loadError}</span>` : 'Not matched – tap the picture to choose'}</div>
+              ${m.p && m.loadError && html`<button class="btn small" onClick=${async () => {
+                const again = await matchDetection(m.det);
+                update(i, { m: again, chosen: again.best, action: defaultAction(again.p.dex, again.best, r.lang) });
+              }}>Try again</button>`}
               <div class="muted small">Read: ${readLine(m.det)}</div>
               <div class="row-wrap">
                 ${r.chosen && (m.sure && r.chosen === m.best ? html`<span class="badge ok-badge">✓ Matched</span>` : html`<span class="badge">Check this one</span>`)}

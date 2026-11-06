@@ -3,7 +3,7 @@
 const SCOPE = new URL(self.registration.scope);
 const IS_TEST = /\/test\/$/.test(SCOPE.pathname);
 const P = IS_TEST ? 'test-' : 'prod-';
-const VERSION = 'v11';
+const VERSION = 'v12';
 const SHELL = `${P}shell-${VERSION}`;
 const SPRITES = `${P}sprites-v1`;
 const SDK = `${P}sdk-v1`;
