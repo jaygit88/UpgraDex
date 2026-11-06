@@ -14,9 +14,11 @@ permissions:
   pages: write
   id-token: write
 
+# Updates to main and test can land close together; queue them instead of colliding.
+# (Every run rebuilds both copies, so the last one always publishes the latest of each.)
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
