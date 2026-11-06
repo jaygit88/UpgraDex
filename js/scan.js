@@ -77,7 +77,10 @@ export async function callScanner(settings, body) {
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 // "001" -> "1", "TG012" -> "TG12", "swsh203" -> "SWSH203"
-export const normNum = (s) => String(s || '').toUpperCase().replace(/\s/g, '').replace(/^([A-Z]*)0+(\d)/, '$1$2');
+// "001" -> "1", "TG012" -> "TG12", "#057/091" -> "57", "No. 25" -> "25"
+export const normNum = (s) => String(s || '').toUpperCase().split('/')[0]
+  .replace(/^NO\.?/, '').replace(/[^A-Z0-9]/g, '').replace(/^([A-Z]*)0+(\d)/, '$1$2');
+const normTotal = (s) => String(s || '').replace(/\D/g, '').replace(/^0+(\d)/, '$1');
 
 export function findPokemon(det) {
   if (det.pokemon) {
@@ -90,23 +93,36 @@ export function findPokemon(det) {
   return POKEDEX.filter((p) => cn.includes(norm(p.name))).sort((a, b) => b.name.length - a.name.length)[0] || null;
 }
 
+// Ranks a Pokémon's cards against what the scanner read. Points:
+//   number matches 4 · set code matches 3 · set's official total matches the "/189" part 2 · exact name 1
+// Older cards print no set code, so the total after the slash is what tells the sets apart.
+// Result: best (pre-selected card), level ('exact' | 'likely' | 'guess'), sure (exact), candidates (ranked).
 export function rankCards(det, cards) {
   const num = normNum(det.number);
   const code = norm(det.set_code);
+  const total = normTotal(det.set_total || (String(det.number || '').split('/')[1] || ''));
   const name = norm(det.card_name);
   const scored = cards.map((c, i) => {
+    const set = SETS[c.setId];
+    const numHit = !!num && normNum(c.num) === num;
+    const codeHit = !!code && norm(set?.a) === code;
+    const totalHit = !!total && !!set?.o && String(set.o) === total;
     let s = 0;
-    if (num && normNum(c.num) === num) s += 4;
-    if (code && norm(SETS[c.setId]?.a) === code) s += 3;
+    if (numHit) s += 4;
+    if (codeHit) s += 3;
+    if (totalHit) s += 2;
     if (name && norm(c.name) === name) s += 1;
-    return { c, s, i };
+    return { c, s, i, numHit, setHit: codeHit || totalHit };
   });
   scored.sort((a, b) => b.s - a.s || a.i - b.i); // ties keep newest-first order
   const top = scored[0];
-  const numberMatches = scored.filter((x) => x.s >= 4).length;
-  // Sure = set code and number both match, or (English card) only one card has that number and the name matches.
-  const sure = !!top && (top.s >= 7 || (det.language === 'EN' && numberMatches === 1 && top.s >= 5));
-  return { best: top && top.s >= 4 ? top.c : null, candidates: scored.map((x) => x.c), sure };
+  if (!top) return { best: null, level: null, sure: false, candidates: [] };
+  const tied = scored.filter((x) => x.s === top.s).length;
+  let level = 'guess';
+  if (top.numHit && top.setHit && tied === 1) level = 'exact';
+  else if (top.numHit && tied === 1) level = 'likely';
+  else if (top.numHit || (top.setHit && tied === 1)) level = 'likely';
+  return { best: top.c, level, sure: level === 'exact', candidates: scored.map((x) => x.c) };
 }
 
 export async function matchDetection(det) {
@@ -202,6 +218,14 @@ export function ScanScreen() {
   </div>`;
 }
 
+// How sure the scanner is about the pre-selected card.
+function MatchBadge({ m, chosen }) {
+  if (chosen !== m.best) return html`<span class="badge">You picked this one</span>`;
+  if (m.level === 'exact') return html`<span class="badge ok-badge">✓ Matched</span>`;
+  if (m.level === 'likely') return html`<span class="badge likely-badge">Probably this one – check the picture</span>`;
+  return html`<span class="badge guess-badge">Best guess – check it's the same picture</span>`;
+}
+
 export function Candidates({ m, chosen, onChoose }) {
   const list = m.candidates.slice(0, 24);
   if (!list.length) return null;
@@ -228,12 +252,12 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
   store.useCollection();
   const [m, setM] = useState(matches[0]);
   const [chosen, setChosen] = useState(m?.best || null);
-  const [showAll, setShowAll] = useState(!m?.best);
+  const [showAll, setShowAll] = useState(!m?.best || m?.level === 'guess');
   const retry = async () => {
     const again = await matchDetection(m.det);
     setM(again);
     setChosen(again.best || null);
-    setShowAll(!again.best);
+    setShowAll(!again.best || again.level === 'guess');
   };
 
   if (!m) {
@@ -259,7 +283,7 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
         <div class="muted">${pad(m.p.dex)} ${m.p.name}</div>
         <${CardDetails} card=${chosen} />
         <div class="row-wrap">
-          ${m.sure && chosen === m.best ? html`<span class="badge ok-badge">✓ Matched</span>` : html`<span class="badge">Best guess – check it's the same picture</span>`}
+          <${MatchBadge} m=${m} chosen=${chosen} />
           <${LangBadge} lang=${lang} />
         </div>
 
@@ -297,7 +321,9 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
   store.useCollection();
   const [rows, setRows] = useState(() => matches.map((m) => {
     const lang = langOf(m.det);
-    return { m, chosen: m.best, lang, action: m.p ? defaultAction(m.p.dex, m.best, lang) : 'skip', open: false };
+    let action = m.p ? defaultAction(m.p.dex, m.best, lang) : 'skip';
+    if (m.level === 'guess' && action === 'save') action = 'skip'; // only save a guess if he ticks it
+    return { m, chosen: m.best, lang, action, open: false };
   }));
   const update = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const toSave = rows.filter((r) => r.m.p && ((r.action === 'save' && r.chosen) || r.action === 'mark'));
@@ -308,7 +334,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
   const counts = { save: toSave.length, have: 0, check: 0, replace: 0 };
   for (const r of rows) {
     if (r.action === 'have' || r.action === 'marked') counts.have++;
-    else if (!r.m.p || (!r.chosen && r.action !== 'mark')) counts.check++;
+    else if (!r.m.p || (!r.chosen && r.action !== 'mark') || (r.m.level === 'guess' && r.action === 'skip' && r.chosen === r.m.best)) counts.check++;
     else if (r.action === 'skip' && r.chosen) counts.replace++;
   }
   const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
@@ -383,7 +409,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
               }}>Try again</button>`}
               <div class="muted small">Read: ${readLine(m.det)}</div>
               <div class="row-wrap">
-                ${r.chosen && (m.sure && r.chosen === m.best ? html`<span class="badge ok-badge">✓ Matched</span>` : html`<span class="badge">Check this one</span>`)}
+                ${r.chosen && html`<${MatchBadge} m=${m} chosen=${r.chosen} />`}
                 ${r.chosen && html`<${RarityChip} rarity=${r.chosen.rarity} short />`}
               </div>
               ${m.p && html`<${BinderSpot} dex=${m.p.dex} compact />`}
@@ -398,7 +424,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
                 ? html`<div class="small ok-text">${r.justSaved ? `✓ Saved as your ${m.p.name}` : `✓ Already your ${m.p.name} — nothing to save`}</div>`
                 : html`<label class="check small">
                     <input type="checkbox" checked=${r.action === 'save'} onChange=${(e) => update(i, { action: e.currentTarget.checked ? 'save' : 'skip' })} />
-                    ${differs ? `Replace your current ${m.p.name} (${owned.set} #${owned.num})` : `Save as your ${m.p.name}`}
+                    ${differs ? `Replace your current ${m.p.name} (${owned.set} #${owned.num})` : m.level === 'guess' && r.chosen === m.best && r.action !== 'save' ? `Best guess — tick if it's the right card` : `Save as your ${m.p.name}`}
                   </label>`)}
             </div>
           </div>

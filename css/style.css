@@ -458,3 +458,6 @@ label.inline input, label.inline select { width: 80px; margin: 0; }
 /* Version number, top right of the header */
 .top-right { display: flex; align-items: center; gap: 8px; }
 .version-tag { background: rgba(255, 255, 255, .18); color: #fff; border: none; border-radius: 999px; padding: 4px 10px; font-size: .8rem; font-weight: 700; letter-spacing: .3px; cursor: pointer; min-height: 30px; }
+.likely-badge { background: #dbeafe; color: #1e4f91; }
+.guess-badge { background: #fff3c4; color: #5c4400; }
+@media (prefers-color-scheme: dark) { .likely-badge { background: #1b2f4f; color: #a8cbff; } .guess-badge { background: #3b3010; color: #f5dc8a; } }

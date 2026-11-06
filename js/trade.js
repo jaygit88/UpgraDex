@@ -117,7 +117,7 @@ export function TradeCheck({ ready, onDone }) {
       const det = (res.cards || [])[0];
       if (!det) throw new Error('No card found in that photo.');
       const m = await matchDetection(det);
-      if (m.best && m.sure) add(side, { dex: m.p.dex, card: m.best, lang: langOf(det) });
+      if (m.best && m.level !== 'guess') add(side, { dex: m.p.dex, card: m.best, lang: langOf(det) });
       else if (m.p && m.candidates.length) setAdding({ side, phase: 'choose', m });
       else throw new Error(m.loadError || "Couldn't tell which card that is. Try again, or use Find by name.");
     } catch (e) {
