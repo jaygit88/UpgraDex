@@ -413,7 +413,10 @@ function PickerScreen({ dex, purpose }) {
       ${rarities.map(([r, n]) => html`<button class=${`chip ${rarity === r ? 'on' : ''}`} onClick=${() => setRarity(rarity === r ? '' : r)}>
         ${rarityLabel(r)} <span class="muted">${n}</span></button>`)}
     </div>
-    ${state.loading && state.cards.length === 0 && html`<p class="muted center">Loading cards…</p>`}
+    ${state.loading && state.cards.length === 0 && html`<div class="loading-cards">
+      <div class="gastly-box"><img src="icons/loading-gastly.gif" alt="" width="500" height="500" /></div>
+      <p>Loading ${p.name} cards…</p>
+    </div>`}
     ${state.error && html`<p class="error center">${state.error} <button class="btn small" onClick=${() => load(true)}>Try again</button></p>`}
     ${state.stale && html`<p class="muted center small">Offline – showing saved list.</p>`}
     ${!state.loading && !state.error && shown.length === 0 && html`<p class="muted center">No cards match.</p>`}
