@@ -171,7 +171,7 @@ export function ScanScreen() {
     ${state.phase === 'error' && html`<p class="error">${state.message}</p>`}
 
     ${state.phase === 'working' && html`<div class="scan-working">
-      <div class="spinner" aria-hidden="true"></div>
+      <img class="scan-gif" src="icons/loading-charmander.gif" alt="" width="348" height="231" />
       <p>${state.mode === 'quick' ? 'Reading the card…' : 'Reading the page… this takes a few seconds'}</p>
     </div>`}
 

@@ -333,3 +333,6 @@ label.check input { width: 22px; height: 22px; }
 .tabs a span { font-size: .75rem; }
 
 .brand-icon { width: 36px; height: auto; image-rendering: pixelated; flex: none; margin: -4px 0; }
+
+.scan-gif { display: block; width: min(320px, 80%); height: auto; margin: 0 auto 4px; }
+.scan-working p { font-weight: 600; }
