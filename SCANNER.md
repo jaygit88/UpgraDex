@@ -21,8 +21,8 @@ There are two copies: **upgradex-scanner** (used by the real app, deployed from 
 
 ### 2. Cloudflare (runs the scanner, free)
 1. Sign up at https://dash.cloudflare.com.
-2. Open **Workers & Pages** once. It asks you to pick your `workers.dev` subdomain (e.g. `jaygit88`). Note it down.
-3. Copy your **Account ID**. It's on the Workers & Pages overview page (right-hand side), or in the address bar after `dash.cloudflare.com/`.
+2. Open **Compute → Workers & Pages**. The **Account details** box on the right shows your **Subdomain** (this account's is `jay-tuck1988.workers.dev`, already set in `js/config.js`).
+3. Copy the **Account ID** from the same box.
 4. **My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template → Continue → Create Token.** Copy the token.
 
 ### 3. Pick a passcode
@@ -44,10 +44,7 @@ After that it redeploys by itself whenever the scanner code changes.
 
 ### 6. Connect the app
 In UpgraDex (or UpgraDex Test) go to **Settings → Scanner**:
-- Address: `https://upgradex-scanner-test.<your-subdomain>.workers.dev` for UpgraDex Test, or `https://upgradex-scanner.<your-subdomain>.workers.dev` for the real app.
-- Passcode: your passcode.
-
-Tap **Save & check**. It should say "Connected". (Once the subdomain is set in `js/config.js`, the address fills itself in.)
+The address fills itself in, so just type the passcode and tap **Save & check**. It should say "Connected".
 
 ## Running the tests
 ```bash
