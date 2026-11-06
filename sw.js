@@ -1,11 +1,15 @@
 // Service worker: keeps the app working offline (e.g. in a shop with bad signal).
-const VERSION = 'v4';
-const SHELL = `shell-${VERSION}`;
-const SPRITES = 'sprites-v1';
-const SDK = 'sdk-v1';
+// The real app and the test copy (under /test/) share one website, so each keeps its own caches.
+const SCOPE = new URL(self.registration.scope);
+const IS_TEST = /\/test\/$/.test(SCOPE.pathname);
+const P = IS_TEST ? 'test-' : 'prod-';
+const VERSION = 'v5';
+const SHELL = `${P}shell-${VERSION}`;
+const SPRITES = `${P}sprites-v1`;
+const SDK = `${P}sdk-v1`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/app.js', 'js/api.js', 'js/data.js', 'js/idb.js', 'js/price.js', 'js/rarity.js', 'js/store.js', 'js/sync.js',
+  'js/app.js', 'js/api.js', 'js/env.js', 'js/data.js', 'js/idb.js', 'js/price.js', 'js/rarity.js', 'js/store.js', 'js/sync.js',
   'vendor/preact-htm.js', 'data/pokedex.json', 'data/sets.json',
   'icons/favicon-64.png', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];
@@ -16,7 +20,10 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (![SHELL, SPRITES, SDK].includes(k)) await caches.delete(k);
+    for (const k of await caches.keys()) {
+      const mine = IS_TEST ? k.startsWith('test-') : !k.startsWith('test-');
+      if (mine && ![SHELL, SPRITES, SDK].includes(k)) await caches.delete(k);
+    }
     await self.clients.claim();
   })());
 });
@@ -49,7 +56,12 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin === location.origin) { e.respondWith(networkFirst(req)); return; }
+  if (url.origin === location.origin) {
+    // The real app leaves the test copy's files to the test copy's own service worker.
+    if (!IS_TEST && url.pathname.startsWith(SCOPE.pathname + 'test/')) return;
+    e.respondWith(networkFirst(req));
+    return;
+  }
   if (url.hostname === 'raw.githubusercontent.com' && url.pathname.includes('/sprites/')) {
     e.respondWith(cacheFirst(SPRITES, req, true));
     return;

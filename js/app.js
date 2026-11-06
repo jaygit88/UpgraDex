@@ -6,6 +6,7 @@ import { PriceTag, PriceBlock } from './price.js';
 import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from './rarity.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
+import { IS_TEST, KEY_PREFIX } from './env.js';
 
 const { MAX_UPS, LANGS } = store;
 const LANG_NAMES = { EN: 'English', JP: 'Japanese', KR: 'Korean' };
@@ -38,9 +39,9 @@ const go = (path) => { location.hash = path; };
 
 function useSessionState(key, initial) {
   const [v, setV] = useState(() => {
-    try { const s = sessionStorage.getItem('pu:' + key); return s != null ? JSON.parse(s) : initial; } catch { return initial; }
+    try { const s = sessionStorage.getItem(KEY_PREFIX + key); return s != null ? JSON.parse(s) : initial; } catch { return initial; }
   });
-  useEffect(() => { try { sessionStorage.setItem('pu:' + key, JSON.stringify(v)); } catch {} }, [v]);
+  useEffect(() => { try { sessionStorage.setItem(KEY_PREFIX + key, JSON.stringify(v)); } catch {} }, [v]);
   return [v, setV];
 }
 
@@ -890,7 +891,7 @@ function App() {
   const tab = route.name === 'shop' ? 'shop' : route.name === 'settings' ? 'settings' : 'dex';
   return html`<div class="app">
     <header class="top">
-      <a class="brand" href="#/"><span class="ball" aria-hidden="true"></span>UpgraDex</a>
+      <a class="brand" href="#/"><span class="ball" aria-hidden="true"></span>UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
       <${SyncStatusDot} />
     </header>
     <div class="screens">
@@ -911,6 +912,10 @@ function App() {
 }
 
 async function main() {
+  if (IS_TEST) {
+    document.documentElement.classList.add('is-test');
+    document.title = 'UpgraDex Test';
+  }
   try {
     await loadStaticData();
   } catch (e) {

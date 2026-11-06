@@ -1,8 +1,12 @@
 name: Deploy to GitHub Pages
 
+# Publishes the real app (main branch) at the site root and the test copy (test branch) under /test/.
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: ["Test branch updated"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -22,9 +26,38 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site
+
+      - name: Is there a test branch?
+        id: test
+        run: |
+          if git ls-remote --exit-code --heads "https://github.com/${{ github.repository }}.git" test >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.test.outputs.exists == 'true'
+        with:
+          ref: test
+          path: test-src
+
+      - name: Assemble site
+        run: |
+          if [ -d test-src ]; then
+            mkdir -p site/test
+            cp -r test-src/. site/test/
+            rm -rf site/test/.git site/test/.github site/test/scanner
+            node site/scripts/make-test-site.mjs site/test
+          fi
+          rm -rf site/.git site/scanner
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4

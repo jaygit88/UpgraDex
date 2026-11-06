@@ -9,9 +9,10 @@
 // Slot = { id, name, img, rarity, set, setId, num, date, lang: 'EN'|'JP'|'KR', custom?, unknown? }
 
 import { useEffect, useState } from '../vendor/preact-htm.js';
+import { KEY_PREFIX } from './env.js';
 
-const KEY = 'pu:collection';
-const SETTINGS_KEY = 'pu:settings';
+const KEY = `${KEY_PREFIX}collection`;
+const SETTINGS_KEY = `${KEY_PREFIX}settings`;
 export const MAX_UPS = 3;
 export const LANGS = ['EN', 'JP', 'KR'];
 
