@@ -3,14 +3,14 @@
 const SCOPE = new URL(self.registration.scope);
 const IS_TEST = /\/test\/$/.test(SCOPE.pathname);
 const P = IS_TEST ? 'test-' : 'live-';
-const VERSION = 'v14';
+const VERSION = 'v15';
 const SHELL = `${P}shell-${VERSION}`;
 const SPRITES = `${P}sprites-v1`;
 const SDK = `${P}sdk-v1`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/app.js', 'js/api.js', 'js/env.js', 'js/scan.js', 'js/config.js', 'js/verdict.js', 'js/trade.js', 'js/budget.js', 'js/summary.js', 'js/binder.js', 'js/data.js', 'js/idb.js', 'js/price.js', 'js/rarity.js', 'js/store.js', 'js/sync.js',
-  'vendor/preact-htm.js', 'data/pokedex.json', 'data/sets.json',
+  'vendor/preact-htm.js', 'data/pokedex.json', 'data/sets.json', 'data/extra-images.json',
   'icons/favicon-64.png', 'icons/header-gengar-art.png', 'icons/loading-charmander.gif', 'icons/loading-gastly.gif', 'icons/splash-falinks.webp', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];
 

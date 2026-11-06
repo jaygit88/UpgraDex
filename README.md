@@ -27,6 +27,9 @@ The `test` branch is published at https://jaygit88.github.io/UpgraDex/test/ as *
 - Pokédex names (EN/JP/KR): [PokéAPI](https://pokeapi.co), pre-built into `data/`.
 - Currency rates: [Frankfurter](https://frankfurter.app).
 
+Some cards have no picture on TCGdex. `data/extra-images.json` maps those to pictures on pokemontcg.io
+(rebuild with `node scripts/build-extra-images.mjs`).
+
 To refresh `data/pokedex.json` and `data/sets.json` (e.g. when new sets or Pokémon come out):
 
 ```bash
