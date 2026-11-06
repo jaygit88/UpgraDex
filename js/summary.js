@@ -67,10 +67,10 @@ export function SummaryScreen() {
     <div class="row-wrap"><a class="icon-btn" href="#/" aria-label="Back"><${Icon} name="back" /></a><h1 class="grow">Collection summary</h1></div>
 
     <section class="hero-value">
-      <div class="muted small">Estimated value of his collection</div>
+      <div class="muted small">Estimated value of your collection</div>
       <div class="hero-number">${priceState.loading ? '…' : money(total, cur)}</div>
       <div class="muted small">${valued.length} card${valued.length === 1 ? '' : 's'} priced${picked.length < owned.length ? ` · ${owned.length - picked.length} not picked yet, so not counted` : ''}</div>
-      <${ProgressNote} state=${priceState} what="his cards" />
+      <${ProgressNote} state=${priceState} what="your cards" />
     </section>
 
     <div class="stats">
@@ -80,7 +80,7 @@ export function SummaryScreen() {
     </div>
 
     <h2>Most valuable cards</h2>
-    ${top5.length === 0 && html`<p class="muted small">${priceState.loading ? 'Working it out…' : 'Pick his exact cards on each Pokémon’s page to see what they’re worth.'}</p>`}
+    ${top5.length === 0 && html`<p class="muted small">${priceState.loading ? 'Working it out…' : 'Pick your exact cards on each Pokémon’s page to see what they’re worth.'}</p>`}
     <ol class="top-list">
       ${top5.map((x, i) => html`<li key=${x.p.dex}>
         <button class="shop-row" onClick=${() => openSheet({ kind: 'slot', dex: x.p.dex, where: 'owned' })}>
@@ -96,7 +96,7 @@ export function SummaryScreen() {
     </ol>
 
     <h2>Pokédex by generation</h2>
-    <p class="muted small">How much of each generation he's collected (a full bar is complete).</p>
+    <p class="muted small">How much of each generation you've collected (a full bar is complete).</p>
     <${Bars} rows=${genRows} format=${(v, r) => `${v}/${r.total}`} />
 
     ${rarityRows.length > 0 && html`<h2>Cards by rarity</h2><${Bars} rows=${rarityRows} />`}
@@ -104,12 +104,12 @@ export function SummaryScreen() {
     <h2>Languages</h2>
     <${Bars} rows=${langRows} />
 
-    ${setRows.length > 0 && html`<h2>Sets he has most cards from</h2><${Bars} rows=${setRows} />`}
+    ${setRows.length > 0 && html`<h2>Sets you have most cards from</h2><${Bars} rows=${setRows} />`}
 
     ${oldest && html`<h2>Fun facts</h2>
       <ul class="small facts">
         <li>Oldest card: <b>${oldest.e.owned.name}</b> from ${oldest.e.owned.set} (${oldest.e.owned.date.slice(0, 4)}).</li>
-        ${bySet.size > 0 && html`<li>His cards come from <b>${bySet.size}</b> different sets.</li>`}
+        ${bySet.size > 0 && html`<li>Your cards come from <b>${bySet.size}</b> different sets.</li>`}
       </ul>`}
     <p class="muted small">Values are typical recent sale prices for English cards in good condition (${settings.priceSource === 'tcgplayer' ? 'TCGplayer' : 'Cardmarket'}). Japanese and Korean cards are valued as their English version.</p>
   </div>`;

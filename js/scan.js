@@ -162,14 +162,14 @@ export function ScanScreen() {
       </section>
       <section class="scan-mode">
         <h2>Trade check</h2>
-        <p class="muted small">Swapping with a friend? Add both sides' cards to see if it's a fair trade — and whether their cards are upgrades for him.</p>
+        <p class="muted small">Swapping with a friend? Add both sides' cards to see if it's a fair trade — and whether their cards are upgrades for you.</p>
         <div class="row-wrap">
           <button class="btn primary" onClick=${() => setState({ phase: 'trade' })}>Check a trade</button>
         </div>
       </section>
       <section class="scan-mode">
         <h2>Catalogue a binder page</h2>
-        <p class="muted small">Photograph a whole page (up to 9 cards) and save them all as his cards. Uses the more careful reader.</p>
+        <p class="muted small">Photograph a whole page (up to 9 cards) and save them all as your cards. Uses the more careful reader.</p>
         <div class="row-wrap">
           <button class="btn primary" disabled=${!ready} onClick=${() => pick('catalog')}><${Icon} name="camera" /> Scan a page</button>
           <button class="btn" disabled=${!ready} onClick=${() => pick('catalog', true)}>Choose photo</button>
@@ -351,13 +351,13 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
                 ? html`<div class="small ok-text">✓ Marked as owned – pick the exact card later</div>`
                 : !store.getEntry(m.p.dex).owned && html`<label class="check small">
                     <input type="checkbox" checked=${r.action === 'mark'} onChange=${(e) => update(i, { action: e.currentTarget.checked ? 'mark' : 'skip' })} />
-                    He's got a ${m.p.name} now (pick the exact card later)
+                    I've got a ${m.p.name} now (pick the exact card later)
                   </label>`)}
               ${m.p && r.chosen && (r.action === 'have'
-                ? html`<div class="small ok-text">✓ Saved as his ${m.p.name}</div>`
+                ? html`<div class="small ok-text">✓ Saved as your ${m.p.name}</div>`
                 : html`<label class="check small">
                     <input type="checkbox" checked=${r.action === 'save'} onChange=${(e) => update(i, { action: e.currentTarget.checked ? 'save' : 'skip' })} />
-                    ${differs ? `Replace his current ${m.p.name} (${owned.set} #${owned.num})` : `Save as his ${m.p.name}`}
+                    ${differs ? `Replace your current ${m.p.name} (${owned.set} #${owned.num})` : `Save as your ${m.p.name}`}
                   </label>`)}
             </div>
           </div>

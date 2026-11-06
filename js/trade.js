@@ -41,7 +41,7 @@ function CardFinder({ side, onPick, onCancel }) {
     ${poke && html`<div>
       <div class="row-wrap"><b>${poke.name}</b><button class="btn small" onClick=${() => { setPoke(null); setState(null); }}>Change Pokémon</button></div>
       ${hisCard && html`<div class="row-wrap"><button class="btn primary" onClick=${() => onPick({ dex: poke.dex, card: hisCard, lang: hisCard.lang || 'EN' })}>
-        Add his ${hisCard.name} (${hisCard.set} #${hisCard.num})</button></div>`}
+        Add your ${hisCard.name} (${hisCard.set} #${hisCard.num})</button></div>`}
       ${state?.loading && html`<p class="muted small">Loading ${poke.name} cards…</p>`}
       ${state?.error && html`<p class="error small">${state.error}</p>`}
       ${state && !state.loading && state.cards?.length > 0 && html`<p class="small muted">${hisCard ? 'Or tap' : 'Tap'} the card being traded:</p>
@@ -135,8 +135,8 @@ export function TradeCheck({ ready, onDone }) {
     result = fair
       ? { kind: 'fair', title: 'Fair trade 👍', detail: 'Both sides are worth about the same.' }
       : diff > 0
-        ? { kind: 'good', title: 'Good deal for him!', detail: `He'd get about ${money(diff, cur)} more than he gives.` }
-        : { kind: 'bad', title: 'Careful — he gives more', detail: `He'd be giving away about ${money(-diff, cur)} more than he gets.` };
+        ? { kind: 'good', title: 'Good deal for you!', detail: `You'd get about ${money(diff, cur)} more than you give.` }
+        : { kind: 'bad', title: 'Careful — you give more', detail: `You'd be giving away about ${money(-diff, cur)} more than you get.` };
   }
 
   const addingPanel = (side) => {
@@ -160,11 +160,11 @@ export function TradeCheck({ ready, onDone }) {
     <div class="row-wrap"><button class="btn small" onClick=${onDone}>← Back</button><h2 class="grow">Trade check</h2></div>
 
     <div class="trade-grid">
-      <${Side} side="his" title="He gives" items=${items.his} total=${his} adding=${adding?.side === 'his'}
+      <${Side} side="his" title="You give" items=${items.his} total=${his} adding=${adding?.side === 'his'}
         onScan=${() => startScan('his')} onFind=${() => setAdding({ side: 'his', phase: 'find' })} onRemove=${remove('his')} onLang=${setLangFor('his')} ...${sideProps}>
         ${addingPanel('his')}
       </${Side}>
-      <${Side} side="theirs" title="He gets" items=${items.theirs} total=${theirs} adding=${adding?.side === 'theirs'}
+      <${Side} side="theirs" title="You get" items=${items.theirs} total=${theirs} adding=${adding?.side === 'theirs'}
         onScan=${() => startScan('theirs')} onFind=${() => setAdding({ side: 'theirs', phase: 'find' })} onRemove=${remove('theirs')} onLang=${setLangFor('theirs')} ...${sideProps}>
         ${addingPanel('theirs')}
       </${Side}>
@@ -173,7 +173,7 @@ export function TradeCheck({ ready, onDone }) {
     <${ProgressNote} state=${priceState} what="the cards" />
     ${result && html`<div class=${`trade-result t-${result.kind}`} role="status">
       <div class="verdict-title">${result.title}</div>
-      <div>He gives <b>${money(his, cur)}</b> · he gets <b>${money(theirs, cur)}</b></div>
+      <div>You give <b>${money(his, cur)}</b> · you get <b>${money(theirs, cur)}</b></div>
       <div class="small">${result.detail}</div>
     </div>`}
     ${!both && html`<p class="muted small">Add at least one card to each side to see if it's fair.</p>`}

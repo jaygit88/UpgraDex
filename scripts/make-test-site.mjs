@@ -5,13 +5,13 @@ import path from 'node:path';
 
 const dir = process.argv[2];
 if (!dir) throw new Error('usage: make-test-site.mjs <dir>');
-const PURPLE = '#6d28d9';
+const ORANGE = '#e3350d'; // the real app is purple, the test copy orange
 
 const manifestPath = path.join(dir, 'manifest.webmanifest');
 const m = JSON.parse(await readFile(manifestPath, 'utf8'));
 m.name = 'UpgraDex Test';
 m.short_name = 'UpgraDex Test';
-m.theme_color = PURPLE;
+m.theme_color = ORANGE;
 // A different identity from the real app, so Chrome installs it as a second app.
 m.id = (m.id || '/UpgraDex/').replace(/\/?$/, '/') + 'test/';
 m.icons = m.icons.map((i) => ({ ...i, src: i.src.replace('icons/', 'icons/test-') }));
@@ -20,7 +20,7 @@ await writeFile(manifestPath, JSON.stringify(m, null, 2));
 const htmlPath = path.join(dir, 'index.html');
 let h = await readFile(htmlPath, 'utf8');
 h = h.replace(/<title>[^<]*<\/title>/, '<title>UpgraDex Test</title>')
-  .replace(/(name="theme-color" content=")[^"]*"/, `$1${PURPLE}"`)
+  .replace(/(name="theme-color" content=")[^"]*"/, `$1${ORANGE}"`)
   .replace(/(name="apple-mobile-web-app-title" content=")[^"]*"/, '$1UpgraDex Test"')
   .replace(/href="icons\/(favicon-64|apple-touch-icon)\.png"/g, 'href="icons/test-$1.png"');
 await writeFile(htmlPath, h);

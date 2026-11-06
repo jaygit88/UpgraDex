@@ -81,7 +81,7 @@ function Planner({ entries }) {
     return html`<p class="muted">No upgrades planned yet. Add some on each Pokémon's page, then come back to plan what to buy.</p>`;
   }
   return html`<div>
-    <label class="budget-amount">How much has he got to spend?
+    <label class="budget-amount">How much have you got to spend?
       <div class="money-input"><span>${sym}</span>
         <input type="number" inputmode="decimal" min="0" step="1" value=${amount} onInput=${(e) => setAmount(e.currentTarget.value)} />
       </div>
@@ -90,7 +90,7 @@ function Planner({ entries }) {
       ${[5, 10, 20, 50].map((n) => html`<button class=${`chip ${budget === n ? 'on' : ''}`} onClick=${() => setAmount(n)}>${money(n, cur).replace(/\.00$/, '')}</button>`)}
     </div>
     <div class="chips">
-      <button class=${`chip ${which === 'all' ? 'on' : ''}`} onClick=${() => setWhich('all')}>Any of his top 3</button>
+      <button class=${`chip ${which === 'all' ? 'on' : ''}`} onClick=${() => setWhich('all')}>Any of your top 3</button>
       <button class=${`chip ${which === 'top' ? 'on' : ''}`} onClick=${() => setWhich('top')}>Top picks only</button>
     </div>
     <div class="chips">
@@ -98,7 +98,7 @@ function Planner({ entries }) {
       <button class=${`chip ${strategy === 'most' ? 'on' : ''}`} onClick=${() => setStrategy('most')}>🔢 Most cards for the money</button>
     </div>
 
-    <${ProgressNote} state=${priceState} what="his upgrades" />
+    <${ProgressNote} state=${priceState} what="your upgrades" />
 
     ${!priceState.loading && html`<div class="budget-summary">
       <div><b>${plan.picks.length}</b><span>upgrade${plan.picks.length === 1 ? '' : 's'}</span></div>
@@ -106,9 +106,9 @@ function Planner({ entries }) {
       <div><b>${money(plan.left, cur)}</b><span>left over</span></div>
     </div>`}
 
-    ${!priceState.loading && plan.picks.length === 0 && html`<p class="muted">Nothing on his list fits ${money(budget, cur)}. The cheapest is ${candidates.length ? money(Math.min(...candidates.map((c) => c.price)), cur) : '–'}.</p>`}
+    ${!priceState.loading && plan.picks.length === 0 && html`<p class="muted">Nothing on your list fits ${money(budget, cur)}. The cheapest is ${candidates.length ? money(Math.min(...candidates.map((c) => c.price)), cur) : '–'}.</p>`}
 
-    ${!priceState.loading && plan.nearMiss && html`<p class="near-miss">💡 Just out of reach: <b>${plan.nearMiss.name}</b> (${plan.nearMiss.slot.set}) for ${money(plan.nearMiss.price, cur)} — he'd need <b>${money(plan.nearMiss.price - plan.left, cur)}</b> more.</p>`}
+    ${!priceState.loading && plan.nearMiss && html`<p class="near-miss">💡 Just out of reach: <b>${plan.nearMiss.name}</b> (${plan.nearMiss.slot.set}) for ${money(plan.nearMiss.price, cur)} — you'd need <b>${money(plan.nearMiss.price - plan.left, cur)}</b> more.</p>`}
 
     <div class="shop-list">
       ${plan.picks.map((c) => html`<button class="shop-row" key=${c.dex + '-' + c.rank} onClick=${() => openSheet({ kind: 'slot', dex: c.dex, where: c.rank - 1 })}>
@@ -123,7 +123,7 @@ function Planner({ entries }) {
       </button>`)}
     </div>
     ${unpriced > 0 && html`<p class="muted small">${unpriced} upgrade${unpriced === 1 ? " has" : 's have'} no price yet, so ${unpriced === 1 ? "it isn't" : "they aren't"} included.</p>`}
-    ${missing > 0 && html`<p class="small">Don't forget: he's still missing <a href="#/shop">${missing} Pokémon</a> — any card fills those gaps, usually for pennies.</p>`}
+    ${missing > 0 && html`<p class="small">Don't forget: you're still missing <a href="#/shop">${missing} Pokémon</a> — any card fills those gaps, usually for pennies.</p>`}
     <p class="muted small">Prices are typical recent sale prices; shops often charge a little more.</p>
   </div>`;
 }
@@ -142,7 +142,7 @@ function BestSets({ entries }) {
   if (!groups.length) return html`<p class="muted">No upgrades planned yet.</p>`;
   const max = groups[0].ups.length;
   return html`<div>
-    <p class="small">Sets with the most of his upgrades — the best packs to open if he's buying boosters rather than single cards.</p>
+    <p class="small">Sets with the most of your upgrades — the best packs to open if you're buying boosters rather than single cards.</p>
     <div class="set-list">
       ${groups.slice(0, 25).map((g, i) => {
         const top = g.ups.filter((u) => u.rank === 1).length;
