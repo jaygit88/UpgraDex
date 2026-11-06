@@ -1,13 +1,13 @@
 // Price formatting and the "which price do we show" logic.
 
 import { html, useEffect, useRef, useState } from '../vendor/preact-htm.js';
-import { getPrices, peekPrices, getRates } from './api.js';
+import { getPrices, peekPrices, getRates, getManyPrices } from './api.js';
 import { useSettings } from './store.js';
 
 let ratesCache = null;
 getRates().then((r) => { ratesCache = r; });
 
-function useRates(currency) {
+export function useRates(currency) {
   const [rates, setRates] = useState(ratesCache);
   useEffect(() => {
     if (currency === 'native' || ratesCache) return;
@@ -18,7 +18,7 @@ function useRates(currency) {
   return rates;
 }
 
-function money(amount, unit) {
+export function money(amount, unit) {
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: unit, maximumFractionDigits: amount >= 100 ? 0 : 2 }).format(amount);
   } catch {
@@ -45,6 +45,48 @@ export function headline(p, source) {
   const tpRes = tp != null ? { amount: tp, unit: p.tp.unit, src: 'TCGplayer market' } : null;
   if (source === 'tcgplayer') return tpRes || cmRes;
   return cmRes || tpRes;
+}
+
+// Totals are added up in one currency: the chosen display currency, or the price source's own.
+export function sumCurrency(settings) {
+  if (settings.currency && settings.currency !== 'native') return settings.currency;
+  return settings.priceSource === 'tcgplayer' ? 'USD' : 'EUR';
+}
+
+// A card's typical price as a plain number in sumCurrency (null if unknown).
+export function valueOf(p, settings, rates) {
+  const h = headline(p, settings.priceSource);
+  if (!h) return null;
+  const cur = sumCurrency(settings);
+  if (h.unit === cur) return h.amount;
+  if (!rates || !rates[h.unit] || !rates[cur]) return null;
+  return (h.amount / rates[h.unit]) * rates[cur];
+}
+
+// Loads prices for a list of card ids with progress: { prices: Map, done, total, loading }.
+export function usePriceMap(ids) {
+  const key = [...new Set(ids.filter(Boolean))].sort().join(',');
+  const [state, setState] = useState({ prices: new Map(), done: 0, total: 0, loading: true });
+  useEffect(() => {
+    let live = true;
+    const list = key ? key.split(',') : [];
+    setState((s) => ({ ...s, done: 0, total: list.length, loading: true }));
+    let last = 0;
+    getManyPrices(list, (done, total) => {
+      const now = Date.now();
+      if (live && (now - last > 250 || done === total)) { last = now; setState((s) => ({ ...s, done, total })); }
+    }).then((prices) => { if (live) setState({ prices, done: list.length, total: list.length, loading: false }); });
+    return () => { live = false; };
+  }, [key]);
+  return state;
+}
+
+export function ProgressNote({ state, what }) {
+  if (!state.loading || !state.total) return null;
+  return html`<div class="load-note">
+    <div class="small">Checking prices for ${what}… ${state.done} of ${state.total}</div>
+    <div class="progress"><div style=${`width:${(state.done / state.total) * 100}%`}></div></div>
+  </div>`;
 }
 
 function useVisible(ref) {
