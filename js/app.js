@@ -7,6 +7,10 @@ import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { IS_TEST, KEY_PREFIX } from './env.js';
+import { ScanScreen, ScannerSettings } from './scan.js';
+import { BudgetScreen } from './budget.js';
+import { SummaryScreen } from './summary.js';
+import { BinderSpot, BinderSettings, binderText } from './binder.js';
 
 const { MAX_UPS, LANGS } = store;
 const LANG_NAMES = { EN: 'English', JP: 'Japanese', KR: 'Korean' };
@@ -21,6 +25,9 @@ function parseRoute(hash) {
     return { name: 'pokemon', dex };
   }
   if (parts[0] === 'shop') return { name: 'shop' };
+  if (parts[0] === 'scan') return { name: 'scan' };
+  if (parts[0] === 'budget') return { name: 'budget' };
+  if (parts[0] === 'summary') return { name: 'summary' };
   if (parts[0] === 'settings') return { name: 'settings' };
   return { name: 'dex' };
 }
@@ -105,6 +112,8 @@ function Icon({ name }) {
     close: 'M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z',
     plus: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z',
     refresh: 'M17.6 6.4A8 8 0 1019.8 14h-2.1a6 6 0 11-1.4-6.2L13 11h7V4z',
+    budget: 'M12 2a10 10 0 100 20 10 10 0 000-20zm1 15v2h-2v-2c-1.7-.3-3-1.4-3-3h2c0 .8.9 1.5 2 1.5s2-.6 2-1.4c0-.9-.8-1.2-2.3-1.6C9.8 12 8 11.4 8 9.4c0-1.5 1.2-2.6 3-3V4.5h2v1.9c1.7.4 2.8 1.6 2.8 3.1h-2c0-.8-.8-1.4-1.8-1.4s-2 .5-2 1.3c0 .7.7 1 2.3 1.5 2.1.6 3.7 1.3 3.7 3.3 0 1.5-1.2 2.6-3 2.8z',
+    camera: 'M9 3L7.2 5H4a2 2 0 00-2 2v11a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2h-3.2L15 3H9zm3 5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6z',
   };
   return html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d=${paths[name]} /></svg>`;
 }
@@ -225,6 +234,7 @@ function DexScreen() {
       <div><b>${stats.ups}</b><span>upgrades planned</span></div>
     </div>
     <div class="progress"><div style=${`width:${(stats.owned / POKEDEX.length) * 100}%`}></div></div>
+    <a class="summary-link" href="#/summary">📊 Collection summary & value ›</a>
     <div class="toolbar sticky">
       <input type="search" placeholder="Search name or number…" value=${q} onInput=${(e) => setQ(e.currentTarget.value)} />
       <select value=${gen} onChange=${(e) => setGen(+e.currentTarget.value)} aria-label="Generation">
@@ -286,6 +296,7 @@ function PokemonScreen({ dex }) {
     </div>
 
     <h2>My card</h2>
+    <${BinderSpot} dex=${dex} />
     ${e.owned && !e.owned.unknown ? html`<div class="slot owned-slot">
         <button class="slot-img" onClick=${() => openSheet({ kind: 'slot', dex, where: 'owned' })}><${CardImage} card=${e.owned} /></button>
         <div class="slot-info">
@@ -410,7 +421,10 @@ function PickerScreen({ dex, purpose }) {
       ${rarities.map(([r, n]) => html`<button class=${`chip ${rarity === r ? 'on' : ''}`} onClick=${() => setRarity(rarity === r ? '' : r)}>
         ${rarityLabel(r)} <span class="muted">${n}</span></button>`)}
     </div>
-    ${state.loading && state.cards.length === 0 && html`<p class="muted center">Loading cards…</p>`}
+    ${state.loading && state.cards.length === 0 && html`<div class="loading-cards">
+      <div class="gastly-box"><img src="icons/loading-gastly.gif" alt="" width="500" height="500" /></div>
+      <p>Loading ${p.name} cards…</p>
+    </div>`}
     ${state.error && html`<p class="error center">${state.error} <button class="btn small" onClick=${() => load(true)}>Try again</button></p>`}
     ${state.stale && html`<p class="muted center small">Offline – showing saved list.</p>`}
     ${!state.loading && !state.error && shown.length === 0 && html`<p class="muted center">No cards match.</p>`}
@@ -547,7 +561,7 @@ function SyncGuide() {
       <li>Open the <i>Rules</i> tab, replace everything with the rules below and click <i>Publish</i>.
         <pre>${RULES}</pre>
         <button class="btn small" onClick=${() => navigator.clipboard?.writeText(RULES).then(() => toast({ msg: 'Rules copied' }))}>Copy rules</button></li>
-      <li>Click the ⚙️ next to <i>Project overview → Project settings</i>. Under <i>Your apps</i> click the <b>&lt;/&gt;</b> (Web) button, give it a nickname and click <i>Register app</i> (no hosting needed).</li>
+      <li>Click the ⚙️ next to <i>Project overview → Project settings</i>. Under <i>Your apps</i> click the <b>${'</>'}</b> (Web) button, give it a nickname and click <i>Register app</i> (no hosting needed).</li>
       <li>Copy the <code>firebaseConfig = { … }</code> block it shows and paste it in the box below on the <b>tablet</b>.</li>
       <li>Then use <i>Share / copy join link</i> and open that link on each phone.</li>
     </ol>
@@ -695,7 +709,7 @@ function SettingsScreen() {
         <details>
           <summary><b>First device:</b> paste your Firebase config</summary>
           <textarea rows="6" placeholder="const firebaseConfig = { apiKey: ..., projectId: ... }" value=${cfgText} onInput=${(e) => setCfgText(e.currentTarget.value)}></textarea>
-          <button class="btn primary" disabled=${!cfgText.trim()} onClick=${connectNew}>Connect &amp; upload this collection</button>
+          <button class="btn primary" disabled=${!cfgText.trim()} onClick=${connectNew}>Connect & upload this collection</button>
         </details>
         <details>
           <summary><b>Other devices:</b> paste a join link</summary>
@@ -704,6 +718,10 @@ function SettingsScreen() {
         </details>`}
       ${(err || syncStatus.state === 'error') && html`<p class="error">${err || syncStatus.message}</p>`}
     </section>
+
+    <${ScannerSettings} />
+
+    <${BinderSettings} />
 
     <section>
       <h2>Backup</h2>
@@ -722,7 +740,7 @@ function SettingsScreen() {
 
     <section>
       <h2>Card data</h2>
-      <button class="btn" onClick=${async () => { await idbClear(); toast({ msg: 'Saved card lists and prices cleared' }); }}>Clear saved card lists &amp; prices</button>
+      <button class="btn" onClick=${async () => { await idbClear(); toast({ msg: 'Saved card lists and prices cleared' }); }}>Clear saved card lists & prices</button>
       <p class="muted small">Card info, pictures and prices come from <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> (prices from Cardmarket and TCGplayer). Pokédex from PokéAPI.
         Not affiliated with Nintendo, The Pokémon Company or Creatures.</p>
     </section>
@@ -765,11 +783,11 @@ function CardDetails({ card }) {
   </div>`;
 }
 
-function PickSheet({ dex, card, purpose }) {
+function PickSheet({ dex, card, purpose, lang: initialLang }) {
   store.useCollection();
   const settings = store.useSettings();
   const e = store.getEntry(dex);
-  const [lang, setLang] = useState(settings.defaultLang || 'EN');
+  const [lang, setLang] = useState(initialLang || settings.defaultLang || 'EN');
   const isOwned = store.sameCard(e.owned, card);
   const upIdx = e.ups.findIndex((u) => store.sameCard(u, card));
   const full = e.ups.length >= MAX_UPS;
@@ -781,7 +799,8 @@ function PickSheet({ dex, card, purpose }) {
       x.ups = x.ups.filter((u) => !store.sameCard(u, card));
       return x;
     });
-    toast({ msg: `Saved as your ${speciesName(dex)}`, undo: () => store.setEntry(dex, before) });
+    const spot = binderText(dex, settings);
+    toast({ msg: `Saved as your ${speciesName(dex)}${spot ? ` – goes in ${spot}` : ''}`, undo: () => store.setEntry(dex, before) });
     if (purpose === 'owned' && settings.fastSetup) go(`#/p/${nextDex(dex)}/cards/owned`);
     else go(`#/p/${dex}`);
   };
@@ -888,10 +907,10 @@ function App() {
   openSheet = setSheet;
   toast = (x) => setT({ ...x, key: Date.now() });
 
-  const tab = route.name === 'shop' ? 'shop' : route.name === 'settings' ? 'settings' : 'dex';
+  const tab = ['shop', 'scan', 'budget', 'settings'].includes(route.name) ? route.name : 'dex';
   return html`<div class="app">
     <header class="top">
-      <a class="brand" href="#/"><span class="ball" aria-hidden="true"></span>UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
+      <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar-art.png" alt="" width="40" height="41" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
       <${SyncStatusDot} />
     </header>
     <div class="screens">
@@ -899,10 +918,15 @@ function App() {
       ${route.name === 'pokemon' && html`<${Screen} active key=${'p' + route.dex}><${PokemonScreen} dex=${route.dex} /></${Screen}>`}
       ${route.name === 'picker' && html`<${Screen} active key=${'c' + route.dex + route.purpose}><${PickerScreen} dex=${route.dex} purpose=${route.purpose} /></${Screen}>`}
       ${route.name === 'shop' && html`<${Screen} active><${ShopScreen} /></${Screen}>`}
+      ${route.name === 'scan' && html`<${Screen} active><${ScanScreen} /></${Screen}>`}
+      ${route.name === 'budget' && html`<${Screen} active><${BudgetScreen} /></${Screen}>`}
+      ${route.name === 'summary' && html`<${Screen} active><${SummaryScreen} /></${Screen}>`}
       ${route.name === 'settings' && html`<${Screen} active><${SettingsScreen} /></${Screen}>`}
     </div>
     <nav class="tabs">
       <a class=${tab === 'dex' ? 'on' : ''} href="#/"><${Icon} name="dex" /><span>Pokédex</span></a>
+      <a class=${tab === 'scan' ? 'on' : ''} href="#/scan"><${Icon} name="camera" /><span>Scan</span></a>
+      <a class=${tab === 'budget' ? 'on' : ''} href="#/budget"><${Icon} name="budget" /><span>Budget</span></a>
       <a class=${tab === 'shop' ? 'on' : ''} href="#/shop"><${Icon} name="shop" /><span>Shop list</span></a>
       <a class=${tab === 'settings' ? 'on' : ''} href="#/settings"><${Icon} name="settings" /><span>Settings</span></a>
     </nav>
@@ -911,7 +935,17 @@ function App() {
   </div>`;
 }
 
+const SPLASH_MIN_MS = 1500; // keep the Falinks on screen long enough to see them march
+
+function hideSplash() {
+  const el = document.getElementById('splash');
+  if (!el) return;
+  el.classList.add('hide');
+  setTimeout(() => el.remove(), 400);
+}
+
 async function main() {
+  const started = performance.now();
   if (IS_TEST) {
     document.documentElement.classList.add('is-test');
     document.title = 'UpgraDex Test';
@@ -920,6 +954,7 @@ async function main() {
     await loadStaticData();
   } catch (e) {
     document.getElementById('app').innerHTML = '<p style="padding:2rem">Could not load the app data. Check your connection and reload.</p>';
+    hideSplash();
     return;
   }
 
@@ -934,6 +969,7 @@ async function main() {
   }
 
   render(html`<${App} />`, document.getElementById('app'));
+  setTimeout(hideSplash, Math.max(0, SPLASH_MIN_MS - (performance.now() - started)));
   sync.startSync();
 
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -941,5 +977,7 @@ async function main() {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 }
+
+export { openSheet, toast, go, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName };
 
 main();

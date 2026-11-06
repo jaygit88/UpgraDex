@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>UpgraDex</title>
   <meta name="description" content="Track a one-of-each Pokédex card collection and plan the upgrades." />
-  <meta name="theme-color" content="#e3350d" />
+  <meta name="theme-color" content="#6d28d9" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="UpgraDex" />
@@ -18,7 +18,18 @@
   <link rel="preconnect" href="https://assets.tcgdex.net" />
 </head>
 <body>
-  <div id="app"><p style="padding:2rem;font-family:system-ui">Loading…</p></div>
+  <div id="splash" role="status" aria-label="Loading">
+    <div class="march" aria-hidden="true">
+      <span class="f" style="left:0.000%;width:23.370%;background-size:427.907% 100%;background-position:0.000% 0;animation-delay:0.00s"></span>
+      <span class="f" style="left:23.370%;width:15.652%;background-size:638.889% 100%;background-position:27.706% 0;animation-delay:0.13s"></span>
+      <span class="f" style="left:39.022%;width:15.109%;background-size:661.871% 100%;background-position:45.967% 0;animation-delay:0.26s"></span>
+      <span class="f" style="left:54.130%;width:15.217%;background-size:657.143% 100%;background-position:63.846% 0;animation-delay:0.39s"></span>
+      <span class="f" style="left:69.348%;width:15.000%;background-size:666.667% 100%;background-position:81.586% 0;animation-delay:0.52s"></span>
+      <span class="f" style="left:84.348%;width:15.652%;background-size:638.889% 100%;background-position:100.000% 0;animation-delay:0.65s"></span>
+    </div>
+    <p class="splash-text">Loading<span class="dots"><i>.</i><i>.</i><i>.</i></span></p>
+  </div>
+  <div id="app"></div>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

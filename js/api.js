@@ -86,20 +86,31 @@ async function fetchCardsFor(dex, speciesName) {
 const inflight = new Map();
 
 // Returns { cards, stale, error }. Uses a cached copy when offline.
+// One retry after a short pause covers brief connection hiccups (common on shop Wi-Fi).
+async function fetchWithRetry(dex, speciesName) {
+  try {
+    return await fetchCardsFor(dex, speciesName);
+  } catch (e) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return fetchCardsFor(dex, speciesName);
+  }
+}
+
 export async function getCardsFor(dex, speciesName, { force = false } = {}) {
   const key = `cards:v1:${dex}`;
   const cached = await idbGet(key);
-  if (cached && !force && Date.now() - cached.t < CARDS_TTL) return { cards: cached.cards };
+  const usable = cached && cached.cards && cached.cards.length > 0; // never trust a saved empty list
+  if (usable && !force && Date.now() - cached.t < CARDS_TTL) return { cards: cached.cards };
   if (!inflight.has(key)) {
-    inflight.set(key, fetchCardsFor(dex, speciesName).finally(() => inflight.delete(key)));
+    inflight.set(key, fetchWithRetry(dex, speciesName).finally(() => inflight.delete(key)));
   }
   try {
     const cards = await inflight.get(key);
-    await idbSet(key, { t: Date.now(), cards });
+    if (cards.length) await idbSet(key, { t: Date.now(), cards });
     return { cards };
   } catch (e) {
-    if (cached) return { cards: cached.cards, stale: true };
-    return { cards: [], error: e.message || 'Could not load cards' };
+    if (usable) return { cards: cached.cards, stale: true };
+    return { cards: [], error: "Couldn't reach the card database – check your connection and try again." };
   }
 }
 
@@ -166,13 +177,15 @@ export function peekPrices(id) {
   return priceMemory.get(id);
 }
 
-export async function getPrices(id) {
+// maxAge: how old a saved price may be. Totals (collection value, budget) accept older prices
+// so they don't refetch hundreds of cards every visit.
+export async function getPrices(id, { maxAge = PRICE_TTL } = {}) {
   if (!id) return null;
   const mem = priceMemory.get(id);
-  if (mem && Date.now() - mem.t < PRICE_TTL) return mem;
+  if (mem && Date.now() - mem.t < maxAge) return mem;
   const key = `price:v1:${id}`;
   const cached = await idbGet(key);
-  if (cached && Date.now() - cached.t < PRICE_TTL) { priceMemory.set(id, cached); return cached; }
+  if (cached && Date.now() - cached.t < maxAge) { priceMemory.set(id, cached); return cached; }
   try {
     const value = await enqueue(async () => {
       const r = await fetch(`${BASE}/en/cards/${encodeURIComponent(id)}`);
@@ -187,6 +200,21 @@ export async function getPrices(id) {
     if (cached) { const v = { ...cached, stale: true }; priceMemory.set(id, v); return v; }
     throw e;
   }
+}
+
+export const BULK_PRICE_AGE = 3 * 24 * 3600e3;
+
+// Prices for many cards, reporting progress as they arrive. Cards without a price are left out.
+export async function getManyPrices(ids, onProgress) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const out = new Map();
+  let done = 0;
+  await Promise.all(unique.map(async (id) => {
+    try { out.set(id, await getPrices(id, { maxAge: BULK_PRICE_AGE })); } catch {}
+    done++;
+    if (onProgress) onProgress(done, unique.length);
+  }));
+  return out;
 }
 
 // ---------- Currency conversion (optional) ----------

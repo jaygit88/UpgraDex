@@ -1,0 +1,19 @@
+name = "upgradex-scanner"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Only pages from these addresses may use the scanner (comma-separated).
+ALLOWED_ORIGINS = "https://jaygit88.github.io"
+
+# Secrets (set by the GitHub Action, never stored in the repo):
+#   ANTHROPIC_API_KEY  - your Anthropic API key
+#   APP_PASSCODE       - the passcode typed into UpgraDex's Settings
+
+# The test copy of UpgraDex talks to its own scanner, so scanner changes can be tried first.
+[env.test]
+name = "upgradex-scanner-test"
+
+[env.test.vars]
+ALLOWED_ORIGINS = "https://jaygit88.github.io"
