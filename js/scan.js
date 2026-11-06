@@ -1,7 +1,7 @@
 // Scan tab: photograph cards and let the scanner (a small Cloudflare Worker that asks Claude)
 // read them, then match what it read to the exact card in the TCGdex list.
 //   Quick scan  – one card, Claude Haiku 5.5: what is it, what's it worth, add it.
-//   Catalogue   – a binder page of up to 9 cards, Claude Sonnet 5.5: save them all as "my card".
+//   Catalogue   – a binder page of up to 16 cards, Claude Sonnet 5.5: save them all as "my card".
 
 import { html, useState, useRef, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, BY_DEX, SETS, pad } from './data.js';
@@ -24,6 +24,12 @@ export function scannerUrl(settings) {
 }
 
 export const MAX_EDGE = { quick: 1568, catalog: 2576 };
+
+// Cards per page from the first binder in Settings → Binders (tells the scanner the grid layout).
+function binderPockets(settings) {
+  const b = Array.isArray(settings.binders) && settings.binders.find((x) => x && x.pockets);
+  return b ? b.pockets : null;
+}
 
 // Shrink the photo before sending: smaller uploads, lower cost, still sharp enough to read.
 export async function shrink(file, maxEdge) {
@@ -122,6 +128,7 @@ function readLine(det) {
 export function ScanScreen() {
   const settings = store.useSettings();
   const ready = !!(scannerUrl(settings) && settings.scannerPass);
+  const pocketsLabel = binderPockets(settings) || 16;
   const [state, setState] = useState({ phase: 'idle' });
   const inputs = { quick: useRef(null), catalog: useRef(null), quickGallery: useRef(null), catalogGallery: useRef(null) };
 
@@ -130,7 +137,7 @@ export function ScanScreen() {
     setState({ phase: 'working', mode });
     try {
       const img = await shrink(file, MAX_EDGE[mode]);
-      const res = await callScanner(settings, { mode, image: img.base64 });
+      const res = await callScanner(settings, { mode, image: img.base64, pockets: binderPockets(settings) });
       const matches = await Promise.all((res.cards || []).map(matchDetection));
       setState({ phase: mode, preview: img.preview, matches, key: Date.now() });
     } catch (e) {
@@ -169,7 +176,7 @@ export function ScanScreen() {
       </section>
       <section class="scan-mode">
         <h2>Catalogue a binder page</h2>
-        <p class="muted small">Photograph a whole page (up to 9 cards) and save them all as your cards. Uses the more careful reader.</p>
+        <p class="muted small">Photograph a whole binder page (up to ${pocketsLabel} cards) and save them all as your cards. Uses the more careful reader.</p>
         <div class="row-wrap">
           <button class="btn primary" disabled=${!ready} onClick=${() => pick('catalog')}><${Icon} name="camera" /> Scan a page</button>
           <button class="btn" disabled=${!ready} onClick=${() => pick('catalog', true)}>Choose photo</button>

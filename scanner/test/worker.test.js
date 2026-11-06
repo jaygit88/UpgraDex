@@ -48,11 +48,12 @@ test('quick scan uses Haiku 5.5 without fallbacks and returns the card', async (
   assert.ok(lastRequest.headers['x-api-key'] === 'sk-test' || lastRequest.headers.authorization === 'Bearer sk-test', 'API key is sent');
 });
 
-test('catalogue scan uses Sonnet 5.5 with the default fallback', async () => {
-  nextReply = { json: message(Array.from({ length: 9 }, (_, i) => ({ ...card, position: i + 1 })), { model: 'claude-sonnet-5-5' }) };
-  const res = await call({ mode: 'catalog', image: 'data:image/jpeg;base64,BBBB' });
+test('catalogue scan uses Sonnet 5.5 with the default fallback and returns all 12 cards of a 12-pocket page', async () => {
+  nextReply = { json: message(Array.from({ length: 12 }, (_, i) => ({ ...card, position: i + 1 })), { model: 'claude-sonnet-5-5' }) };
+  const res = await call({ mode: 'catalog', image: 'data:image/jpeg;base64,BBBB', pockets: 12 });
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).cards.length, 9);
+  assert.equal((await res.json()).cards.length, 12);
+  assert.match(lastRequest.body.messages[0].content[1].text, /12 pockets: 3 across and 4 down/);
   assert.equal(lastRequest.body.model, 'claude-sonnet-5-5');
   assert.equal(lastRequest.body.fallbacks, 'default');
   assert.match(lastRequest.headers['anthropic-beta'], /server-side-fallback-2026-07-01/);
@@ -91,4 +92,12 @@ test('CORS preflight and health check work', async () => {
   assert.match(pre.headers.get('access-control-allow-headers'), /X-App-Passcode/);
   const health = await call(null, { method: 'GET', path: '/' });
   assert.equal(health.status, 200);
+});
+
+test('catalogue scan without a known layout still allows up to 16 cards', async () => {
+  nextReply = { json: message(Array.from({ length: 20 }, (_, i) => ({ ...card, position: i + 1 })), { model: 'claude-sonnet-5-5' }) };
+  const res = await call({ mode: 'catalog', image: 'CCCC', pockets: 7 });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).cards.length, 16);
+  assert.doesNotMatch(lastRequest.body.messages[0].content[1].text, /pockets:/);
 });
