@@ -45,9 +45,9 @@ export function binderSpot(dex, settings, entries = store.allEntries()) {
 }
 
 function where(s) {
-  const rowWord = s.rows === 3 ? ['top', 'middle', 'bottom'][s.row - 1] : `row ${s.row}`;
-  const colWord = s.cols === 3 ? ['left', 'middle', 'right'][s.col - 1] : s.cols === 2 ? ['left', 'right'][s.col - 1] : `pocket ${s.col}`;
-  return rowWord === 'middle' && colWord === 'middle' ? 'right in the middle' : `${rowWord} ${colWord}`;
+  const rowWord = s.row === 1 ? 'top row' : s.row === s.rows ? 'bottom row' : s.rows === 3 ? 'middle row' : `row ${s.row}`;
+  const colWord = s.cols === 3 ? ['left', 'middle', 'right'][s.col - 1] : s.cols === 2 ? ['left', 'right'][s.col - 1] : `${s.col}${['st', 'nd', 'rd'][s.col - 1] || 'th'} from left`;
+  return rowWord === 'middle row' && colWord === 'middle' ? 'right in the middle' : `${rowWord}, ${colWord}`;
 }
 
 // "📒 Binder 1 · page 11 · pocket 4 (middle left)" — shown on a Pokémon's page and when saving cards.

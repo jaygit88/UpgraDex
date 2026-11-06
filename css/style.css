@@ -443,3 +443,14 @@ label.inline input, label.inline select { width: 80px; margin: 0; }
 .facts li { margin: 4px 0; }
 @media (max-width: 420px) { .tabs a span { font-size: .68rem; } .tabs .icon { width: 24px; height: 24px; } }
 .near-miss { background: var(--surface); border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); font-size: .92rem; }
+
+/* Catalogue: summary, saved confirmation and the unsaved-cards warning */
+.cat-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.sum-chip { font-size: .85rem; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: var(--surface-2); color: var(--text); }
+.sum-save { background: var(--success); color: #fff; }
+.sum-check { background: #fff3c4; color: #5c4400; }
+@media (prefers-color-scheme: dark) { .sum-check { background: #3b3010; color: #f5dc8a; } }
+.saved-banner { background: color-mix(in srgb, var(--success) 14%, var(--surface)); border: 2px solid var(--success); border-radius: var(--radius); padding: 10px 14px; margin: 0 0 12px; }
+.leave-warning { background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border: 2px solid var(--warn); border-radius: var(--radius); padding: 10px 14px; }
+.sticky-actions { padding: 10px 0; margin-top: 14px; }
+.big-save { font-size: 1.05rem; padding: 10px 20px; }
