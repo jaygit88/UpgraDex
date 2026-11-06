@@ -3,13 +3,13 @@
 const SCOPE = new URL(self.registration.scope);
 const IS_TEST = /\/test\/$/.test(SCOPE.pathname);
 const P = IS_TEST ? 'test-' : 'prod-';
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL = `${P}shell-${VERSION}`;
 const SPRITES = `${P}sprites-v1`;
 const SDK = `${P}sdk-v1`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/app.js', 'js/api.js', 'js/env.js', 'js/data.js', 'js/idb.js', 'js/price.js', 'js/rarity.js', 'js/store.js', 'js/sync.js',
+  'js/app.js', 'js/api.js', 'js/env.js', 'js/scan.js', 'js/config.js', 'js/data.js', 'js/idb.js', 'js/price.js', 'js/rarity.js', 'js/store.js', 'js/sync.js',
   'vendor/preact-htm.js', 'data/pokedex.json', 'data/sets.json',
   'icons/favicon-64.png', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];

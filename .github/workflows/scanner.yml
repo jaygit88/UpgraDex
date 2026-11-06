@@ -1,0 +1,56 @@
+name: Deploy scanner (Cloudflare Worker)
+
+# main -> "upgradex-scanner" (used by the real app); test -> "upgradex-scanner-test" (used by UpgraDex Test).
+# Needs these repository secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, ANTHROPIC_API_KEY, APP_PASSCODE.
+on:
+  push:
+    branches: [main, test]
+    paths: ["scanner/**", ".github/workflows/scanner.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secrets are set up
+        id: secrets
+        env:
+          CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AK: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$CF" ] || [ -z "$AK" ]; then
+            echo "::notice::Scanner secrets aren't set up yet, so the scanner wasn't deployed."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      - name: Install and test
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: scanner
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy
+        if: steps.secrets.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: scanner
+          environment: ${{ github.ref_name == 'test' && 'test' || '' }}
+          secrets: |
+            ANTHROPIC_API_KEY
+            APP_PASSCODE
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APP_PASSCODE: ${{ secrets.APP_PASSCODE }}
