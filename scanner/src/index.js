@@ -5,7 +5,7 @@
 // -> { cards: [...], model, usage }
 //
 // "quick"   = one card, Claude Haiku 5.5 (cheap, fast price checks in a shop)
-// "catalog" = a binder page of up to 9 cards, Claude Sonnet 5.5 (more accurate)
+// "catalog" = a binder page of up to 16 cards (9-, 12- and 16-pocket pages), Claude Sonnet 5.5 (more accurate)
 //
 // The Anthropic API key never leaves this worker.
 
@@ -25,9 +25,9 @@ Identify it and return exactly one entry in "cards".`,
     effort: 'medium',
     maxTokens: 16000,
     fallback: true,
-    prompt: `This photo shows a binder page of Pokémon trading cards, usually a 3×3 grid of up to 9 cards
-(some pockets may be empty). Return one entry per card you can see, numbered 1–9 in reading order
-(left to right, top row first). Skip empty pockets.`,
+    prompt: `This photo shows a binder page of Pokémon trading cards in a grid of pockets
+(usually 3×3, 3 across × 4 down, or 4×4; some pockets may be empty). Return one entry per card you can see,
+numbered from 1 in reading order (left to right, top row first). Skip empty pockets.`,
   },
 };
 
@@ -96,8 +96,14 @@ function sameSecret(a, b) {
   return diff === 0;
 }
 
-export async function identify(client, mode, imageBase64) {
+// Pocket layouts the app can tell us about: [columns, rows].
+export const LAYOUTS = { 4: [2, 2], 9: [3, 3], 12: [3, 4], 16: [4, 4] };
+export const MAX_CARDS = 16;
+
+export async function identify(client, mode, imageBase64, pockets) {
   const m = MODES[mode];
+  const layout = mode === 'catalog' && LAYOUTS[pockets];
+  const layoutHint = layout ? `\n\nThis page has ${pockets} pockets: ${layout[0]} across and ${layout[1]} down, so there are at most ${pockets} cards.` : '';
   const params = {
     model: m.model,
     max_tokens: m.maxTokens,
@@ -106,7 +112,7 @@ export async function identify(client, mode, imageBase64) {
       role: 'user',
       content: [
         { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
-        { type: 'text', text: `${m.prompt}\n\n${FIELD_HELP}` },
+        { type: 'text', text: `${m.prompt}${layoutHint}\n\n${FIELD_HELP}` },
       ],
     }],
   };
@@ -128,7 +134,7 @@ export async function identify(client, mode, imageBase64) {
   } catch {
     return { error: 'The scanner gave an unreadable answer. Please try again.', status: 502 };
   }
-  const cards = Array.isArray(parsed.cards) ? parsed.cards.slice(0, mode === 'quick' ? 1 : 9) : [];
+  const cards = Array.isArray(parsed.cards) ? parsed.cards.slice(0, mode === 'quick' ? 1 : MAX_CARDS) : [];
   return {
     cards,
     model: response.model,
@@ -171,7 +177,7 @@ export default {
 
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL || undefined });
     try {
-      const result = await identify(client, mode, image);
+      const result = await identify(client, mode, image, Number(body.pockets) || null);
       if (result.error) return json({ error: result.error }, result.status, cors);
       return json(result, 200, cors);
     } catch (e) {

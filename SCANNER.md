@@ -5,7 +5,7 @@ The Scan tab sends photos to a small server (a Cloudflare Worker in `scanner/`),
 | Scan | Model | Rough cost |
 |---|---|---|
 | Quick scan (one card) | Claude Haiku 5.5 | well under 0.1p a scan |
-| Catalogue (binder page, up to 9 cards) | Claude Sonnet 5.5 | about 2p a page (~£2.50 for a whole 1,000-card collection) |
+| Catalogue (binder page, up to 16 cards) | Claude Sonnet 5.5 | about 2p a page (~£2.50 for a whole 1,000-card collection) |
 
 The server keeps the Anthropic key secret, and a passcode stops anyone else using it.
 There are two copies: **upgradex-scanner** (used by the real app, deployed from `main`) and

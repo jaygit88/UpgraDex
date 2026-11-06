@@ -11,7 +11,7 @@ A web app (installable on a tablet or phone) for a one-of-each Pokédex card col
   shown in £ by default (converted from Cardmarket's euro prices), plus links to eBay sold listings.
 - **Shop list** of every planned upgrade, sortable by set or rarity, a "Price check any card" search,
   and the list of still-missing Pokémon.
-- **Card scanner:** a quick scan of one card (Claude Haiku 5.5) for a price check, or a binder page of up to 9 cards (Claude Sonnet 5.5) for cataloguing. Set-up steps are in [SCANNER.md](SCANNER.md).
+- **Card scanner:** a quick scan of one card (Claude Haiku 5.5) for a price check, or a binder page of up to 16 cards (Claude Sonnet 5.5) for cataloguing. Set-up steps are in [SCANNER.md](SCANNER.md).
 - **Works offline** once opened (handy in shops), plus backup/restore to a file.
 - **Optional sync** between the tablet and phones through a free Firebase project (set-up steps are in the app under Settings).
 
