@@ -331,3 +331,5 @@ label.check input { width: 22px; height: 22px; }
 .cat-img .card-img { width: 100%; border-radius: 8px; display: block; }
 .sticky-actions { position: sticky; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 8px); background: var(--bg); padding: 8px 0; z-index: 2; }
 .tabs a span { font-size: .75rem; }
+
+.brand-icon { width: 36px; height: auto; image-rendering: pixelated; flex: none; margin: -4px 0; }
