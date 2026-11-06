@@ -1,6 +1,8 @@
 name: Deploy to GitHub Pages
 
-# Publishes the real app (main branch) at the site root and the test copy (test branch) under /test/.
+# Publishes the real app (main branch) under /app/ and the test copy (test branch) under /test/.
+# They sit side by side (neither inside the other) so phones never mix the two installed apps up.
+# The site root just forwards to /app/.
 on:
   push:
     branches: [main]
@@ -30,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-          path: site
+          path: main-src
 
       - name: Is there a test branch?
         id: test
@@ -49,13 +51,17 @@ jobs:
 
       - name: Assemble site
         run: |
+          mkdir -p site/app
+          cp -r main-src/site-root/. site/
+          touch site/.nojekyll
+          cp -r main-src/. site/app/
+          rm -rf site/app/.git site/app/.github site/app/scanner site/app/site-root
           if [ -d test-src ]; then
             mkdir -p site/test
             cp -r test-src/. site/test/
-            rm -rf site/test/.git site/test/.github site/test/scanner
-            node site/scripts/make-test-site.mjs site/test
+            rm -rf site/test/.git site/test/.github site/test/scanner site/test/site-root
+            node main-src/scripts/make-test-site.mjs site/test
           fi
-          rm -rf site/.git site/scanner
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

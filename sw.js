@@ -2,8 +2,8 @@
 // The real app and the test copy (under /test/) share one website, so each keeps its own caches.
 const SCOPE = new URL(self.registration.scope);
 const IS_TEST = /\/test\/$/.test(SCOPE.pathname);
-const P = IS_TEST ? 'test-' : 'prod-';
-const VERSION = 'v13';
+const P = IS_TEST ? 'test-' : 'live-';
+const VERSION = 'v14';
 const SHELL = `${P}shell-${VERSION}`;
 const SPRITES = `${P}sprites-v1`;
 const SDK = `${P}sdk-v1`;
@@ -21,7 +21,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     for (const k of await caches.keys()) {
-      const mine = IS_TEST ? k.startsWith('test-') : !k.startsWith('test-');
+      const mine = IS_TEST ? k.startsWith('test-') : k.startsWith('live-');
       if (mine && ![SHELL, SPRITES, SDK].includes(k)) await caches.delete(k);
     }
     await self.clients.claim();

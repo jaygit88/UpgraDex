@@ -4,7 +4,7 @@
   "description": "Track a one-of-each Pokédex card collection and plan the upgrades.",
   "id": "/UpgraDex/",
   "start_url": "./index.html#/",
-  "scope": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f4f5fb",
   "theme_color": "#6d28d9",

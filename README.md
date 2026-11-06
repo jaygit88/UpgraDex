@@ -43,8 +43,13 @@ Then open http://localhost:8080.
 
 ## Hosting
 
-The app is static files only. `.github/workflows/pages.yml` publishes it to GitHub Pages on every push to `main`
-(one-off: repo *Settings → Pages → Source: GitHub Actions*). It will be at https://jaygit88.github.io/pokeapp/.
+The app is static files only. `.github/workflows/pages.yml` publishes it to GitHub Pages whenever `main` or `test` changes
+(one-off: repo *Settings → Pages → Source: GitHub Actions*):
+
+- **Real app** (from `main`): https://jaygit88.github.io/UpgraDex/app/. The old address https://jaygit88.github.io/UpgraDex/ forwards there (see `site-root/`).
+- **UpgraDex Test** (from `test`): https://jaygit88.github.io/UpgraDex/test/
+
+The two sit side by side rather than one inside the other, so Android never confuses the two installed apps.
 
 When you change files, bump `VERSION` in `sw.js` so installed copies pick up the update.
 
