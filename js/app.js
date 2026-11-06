@@ -1,5 +1,5 @@
 import { html, render, useState, useEffect, useMemo, useRef, useLayoutEffect } from '../vendor/preact-htm.js';
-import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardImg, GENS } from './data.js';
+import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardPicture, GENS } from './data.js';
 import { getCardsFor } from './api.js';
 import { idbClear } from './idb.js';
 import { PriceTag, PriceBlock } from './price.js';
@@ -7,6 +7,7 @@ import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { IS_TEST, KEY_PREFIX } from './env.js';
+import { BUILD } from './version.js';
 import { ScanScreen, ScannerSettings } from './scan.js';
 import { BudgetScreen } from './budget.js';
 import { SummaryScreen } from './summary.js';
@@ -84,7 +85,7 @@ function RarityChip({ rarity, short }) {
 
 function CardImage({ card, q = 'low', className = '' }) {
   const [failed, setFailed] = useState(false);
-  const src = card && !card.custom ? cardImg(card.img, q) : null;
+  const src = cardPicture(card, q);
   if (!src || failed) {
     return html`<div class=${`card-img placeholder ${className}`}>
       <div><b>${card?.name || '?'}</b><br/><span>${card?.set || ''}${card?.num ? ' · ' + card.num : ''}</span>
@@ -359,6 +360,26 @@ function PokemonScreen({ dex }) {
 
 const SORTS = [['new', 'Newest'], ['old', 'Oldest'], ['rarity', 'Rarest']];
 
+// Forgiving card search: every word typed must appear somewhere in the card's name, set, set code,
+// rarity or year, in any order ("charizard max" finds "Charizard VMAX"). A plain number matches the card number.
+const fold = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function searchWords(text) {
+  return fold(text).replace(/[#,]/g, ' ').split(/\s+/).filter(Boolean);
+}
+function cardMatches(c, words) {
+  if (!words.length) return true;
+  const year = c.date && !c.date.startsWith('9999') ? c.date.slice(0, 4) : '';
+  const hay = fold([c.name, c.set, SETS[c.setId]?.a, SETS[c.setId]?.sn, rarityLabel(c.rarity), year].join(' '));
+  const num = fold(c.num).replace(/^([a-z]*)0+(\d)/, '$1$2');
+  return words.every((w) => {
+    if (/^\d+(\/\d+)?$/.test(w)) {
+      const n = w.split('/')[0].replace(/^0+(\d)/, '$1');
+      return num === n || num.replace(/^[a-z]+/, '') === n || w === year;
+    }
+    return hay.includes(w) || num === w.replace(/^([a-z]*)0+(\d)/, '$1$2');
+  });
+}
+
 function PickerScreen({ dex, purpose }) {
   const entries = store.useCollection();
   const settings = store.useSettings();
@@ -383,10 +404,9 @@ function PickerScreen({ dex, purpose }) {
   }, [state.cards]);
 
   const shown = useMemo(() => {
-    const t = text.trim().toLowerCase();
+    const words = searchWords(text);
     let list = state.cards.filter((c) =>
-      (!fancy || rarityRank(c.rarity) >= FANCY_MIN_RANK) && (!rarity || c.rarity === rarity) &&
-      (!t || c.set.toLowerCase().includes(t) || c.name.toLowerCase().includes(t) || c.num.toLowerCase() === t || (SETS[c.setId]?.a || '').toLowerCase() === t));
+      (!fancy || rarityRank(c.rarity) >= FANCY_MIN_RANK) && (!rarity || c.rarity === rarity) && cardMatches(c, words));
     if (sort === 'old') list = [...list].reverse();
     if (sort === 'rarity') list = [...list].sort((a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || b.date.localeCompare(a.date));
     return list;
@@ -410,7 +430,7 @@ function PickerScreen({ dex, purpose }) {
       Fast setup: after picking, jump straight to the next Pokémon
     </label>`}
     <div class="toolbar">
-      <input type="search" placeholder="Filter by set or number…" value=${text} onInput=${(ev) => setText(ev.currentTarget.value)} />
+      <input type="search" placeholder="Search name, set or number…" value=${text} onInput=${(ev) => setText(ev.currentTarget.value)} />
       <select value=${sort} onChange=${(ev) => setSort(ev.currentTarget.value)} aria-label="Sort">
         ${SORTS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}
       </select>
@@ -900,6 +920,14 @@ function Toast({ t, onDone }) {
   </div>`;
 }
 
+function VersionTag() {
+  const when = BUILD.date ? new Date(BUILD.date) : null;
+  const detail = when
+    ? `UpgraDex${IS_TEST ? ' Test' : ''} ${BUILD.label} · updated ${when.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} at ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    : 'Development version';
+  return html`<button class="version-tag" title=${detail} aria-label=${`Version ${BUILD.label}`} onClick=${() => toast({ msg: detail })}>${BUILD.label}</button>`;
+}
+
 function App() {
   const route = useRoute();
   const [sheet, setSheet] = useState(null);
@@ -911,7 +939,10 @@ function App() {
   return html`<div class="app">
     <header class="top">
       <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar-art.png" alt="" width="40" height="41" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
-      <${SyncStatusDot} />
+      <div class="top-right">
+        <${SyncStatusDot} />
+        <${VersionTag} />
+      </div>
     </header>
     <div class="screens">
       <${Screen} active=${route.name === 'dex'}><${DexScreen} /></${Screen}>

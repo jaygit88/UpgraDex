@@ -33,6 +33,7 @@ jobs:
         with:
           ref: main
           path: main-src
+          fetch-depth: 0 # full history, so the version number can count the changes
 
       - name: Is there a test branch?
         id: test
@@ -48,19 +49,29 @@ jobs:
         with:
           ref: test
           path: test-src
+          fetch-depth: 0
 
       - name: Assemble site
         run: |
+          # Version shown in the app's header: v<number of changes>, plus the date of the newest one.
+          write_version() {
+            n=$(git -C "$2" rev-list --count HEAD)
+            sha=$(git -C "$2" rev-parse --short HEAD)
+            date=$(git -C "$2" log -1 --format=%cI)
+            printf "export const BUILD = { label: 'v%s', sha: '%s', date: '%s' };\n" "$n" "$sha" "$date" > "$1/js/version.js"
+          }
           mkdir -p site/app
           cp -r main-src/site-root/. site/
           touch site/.nojekyll
           cp -r main-src/. site/app/
           rm -rf site/app/.git site/app/.github site/app/scanner site/app/site-root
+          write_version site/app main-src
           if [ -d test-src ]; then
             mkdir -p site/test
             cp -r test-src/. site/test/
             rm -rf site/test/.git site/test/.github site/test/scanner site/test/site-root
             node main-src/scripts/make-test-site.mjs site/test
+            write_version site/test test-src
           fi
 
       - uses: actions/configure-pages@v5

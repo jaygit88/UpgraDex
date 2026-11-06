@@ -301,6 +301,23 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
   }));
   const update = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const toSave = rows.filter((r) => r.m.p && ((r.action === 'save' && r.chosen) || r.action === 'mark'));
+  const [savedCount, setSavedCount] = useState(0); // cards saved from this page so far
+  const [leaving, setLeaving] = useState(null); // 'done' | 'next' while asking about unsaved cards
+
+  // What's on the page, for the summary line.
+  const counts = { save: toSave.length, have: 0, check: 0, replace: 0 };
+  for (const r of rows) {
+    if (r.action === 'have' || r.action === 'marked') counts.have++;
+    else if (!r.m.p || (!r.chosen && r.action !== 'mark')) counts.check++;
+    else if (r.action === 'skip' && r.chosen) counts.replace++;
+  }
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+
+  // Leaving with unsaved ticked cards? Ask first instead of quietly losing them.
+  const leave = (kind) => {
+    if (toSave.length) { setLeaving(kind); return; }
+    (kind === 'next' ? onAgain : onDone)();
+  };
 
   const save = () => {
     const before = new Map();
@@ -318,15 +335,32 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
       });
     }
     const n = toSave.length;
-    toast({ msg: `Saved ${n} card${n === 1 ? '' : 's'} 🎉`, undo: () => { for (const [dex, e] of before) store.setEntry(dex, e); } });
-    setRows((rs) => rs.map((r) => (r.action === 'save' ? { ...r, action: 'have' } : r.action === 'mark' ? { ...r, action: 'marked' } : r)));
+    toast({ msg: `Saved ${n} card${n === 1 ? '' : 's'} to your collection 🎉`, undo: () => { for (const [dex, e] of before) store.setEntry(dex, e); setSavedCount((c) => c - n); } });
+    setRows((rs) => rs.map((r) => (r.action === 'save' ? { ...r, action: 'have', justSaved: true } : r.action === 'mark' ? { ...r, action: 'marked' } : r)));
+    setSavedCount((c) => c + n);
+    return n;
   };
 
   return html`<div class="scan-result">
     <div class="read-line"><img class="scan-preview" src=${preview} alt="Your photo" /><div>
       <b>Found ${matches.length} card${matches.length === 1 ? '' : 's'}</b>
-      <div class="muted small">Check each one, then save. Tap a card to pick a different version.</div>
+      <div class="muted small">Check each one, then press <b>Save</b>. Tap a card to pick a different version.</div>
     </div></div>
+
+    ${matches.length > 0 && html`<div class="cat-summary" role="status">
+      ${counts.save > 0 && html`<span class="sum-chip sum-save">✓ ${plural(counts.save, 'card')} to save</span>`}
+      ${counts.have > 0 && html`<span class="sum-chip sum-have">${plural(counts.have, 'card')} already yours</span>`}
+      ${counts.replace > 0 && html`<span class="sum-chip sum-replace">${plural(counts.replace, 'card')} you already have a different version of (tick to replace)</span>`}
+      ${counts.check > 0 && html`<span class="sum-chip sum-check">${plural(counts.check, 'card needs', 'cards need')} checking</span>`}
+    </div>`}
+
+    ${savedCount > 0 && toSave.length === 0 && html`<div class="saved-banner" role="status">
+      <b>✓ ${plural(savedCount, 'card')} saved to your collection</b>
+      <div class="row-wrap">
+        <a class="btn" href="#/">View in Pokédex</a>
+        <button class="btn primary" onClick=${onAgain}><${Icon} name="camera" /> Scan next page</button>
+      </div>
+    </div>`}
 
     ${matches.length === 0 && html`<p>No cards found. Try again with the whole page in the photo and less glare.</p>`}
 
@@ -361,7 +395,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
                     I've got a ${m.p.name} now (pick the exact card later)
                   </label>`)}
               ${m.p && r.chosen && (r.action === 'have'
-                ? html`<div class="small ok-text">✓ Saved as your ${m.p.name}</div>`
+                ? html`<div class="small ok-text">${r.justSaved ? `✓ Saved as your ${m.p.name}` : `✓ Already your ${m.p.name} — nothing to save`}</div>`
                 : html`<label class="check small">
                     <input type="checkbox" checked=${r.action === 'save'} onChange=${(e) => update(i, { action: e.currentTarget.checked ? 'save' : 'skip' })} />
                     ${differs ? `Replace your current ${m.p.name} (${owned.set} #${owned.num})` : `Save as your ${m.p.name}`}
@@ -373,10 +407,23 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
       })}
     </div>
 
-    <div class="row-wrap spaced sticky-actions">
-      <button class="btn primary" disabled=${!toSave.length} onClick=${save}>Save ${toSave.length} card${toSave.length === 1 ? '' : 's'}</button>
-      <button class="btn" onClick=${onAgain}><${Icon} name="camera" /> Scan next page</button>
-      <button class="btn" onClick=${onDone}>Done</button>
+    <div class="sticky-actions">
+      ${leaving && html`<div class="leave-warning" role="alertdialog" aria-label="Unsaved cards">
+        <b>Wait — you haven't saved ${plural(toSave.length, 'card')} yet!</b>
+        <div class="row-wrap">
+          <button class="btn primary" onClick=${() => { save(); const kind = leaving; setLeaving(null); (kind === 'next' ? onAgain : onDone)(); }}>
+            Save ${plural(toSave.length, 'card')}${leaving === 'next' ? ' & scan next' : ''}</button>
+          <button class="btn" onClick=${() => { const kind = leaving; setLeaving(null); (kind === 'next' ? onAgain : onDone)(); }}>Leave without saving</button>
+          <button class="btn small" onClick=${() => setLeaving(null)}>Go back</button>
+        </div>
+      </div>`}
+      ${!leaving && html`<div class="row-wrap">
+        ${toSave.length > 0
+          ? html`<button class="btn primary big-save" onClick=${save}>💾 Save ${plural(toSave.length, 'card')}</button>`
+          : html`<button class="btn primary" disabled>Nothing new to save</button>`}
+        <button class="btn" onClick=${() => leave('next')}><${Icon} name="camera" /> Scan next page</button>
+        <button class="btn" onClick=${() => leave('done')}>Done</button>
+      </div>`}
     </div>
   </div>`;
 }
