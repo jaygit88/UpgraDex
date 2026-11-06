@@ -12,8 +12,9 @@ const m = JSON.parse(await readFile(manifestPath, 'utf8'));
 m.name = 'UpgraDex Test';
 m.short_name = 'UpgraDex Test';
 m.theme_color = ORANGE;
-// A different identity from the real app, so Chrome installs it as a second app.
-m.id = (m.id || '/UpgraDex/').replace(/\/?$/, '/') + 'test/';
+// Its own fixed identity, different from the real app's, so Chrome installs it as a second app.
+// (Fixed rather than derived from the real app's id, so changing one never changes the other.)
+m.id = '/UpgraDex/test/';
 m.icons = m.icons.map((i) => ({ ...i, src: i.src.replace('icons/', 'icons/test-') }));
 await writeFile(manifestPath, JSON.stringify(m, null, 2));
 
