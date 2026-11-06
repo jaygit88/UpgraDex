@@ -1,0 +1,13 @@
+name: Test branch updated
+
+# A push to the "test" branch triggers "Deploy to GitHub Pages" (which runs from main),
+# so the test copy at /test/ is rebuilt.
+on:
+  push:
+    branches: [test]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Test branch updated – the Pages workflow will now rebuild the site."
