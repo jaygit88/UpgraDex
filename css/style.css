@@ -454,3 +454,7 @@ label.inline input, label.inline select { width: 80px; margin: 0; }
 .leave-warning { background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border: 2px solid var(--warn); border-radius: var(--radius); padding: 10px 14px; }
 .sticky-actions { padding: 10px 0; margin-top: 14px; }
 .big-save { font-size: 1.05rem; padding: 10px 20px; }
+
+/* Version number, top right of the header */
+.top-right { display: flex; align-items: center; gap: 8px; }
+.version-tag { background: rgba(255, 255, 255, .18); color: #fff; border: none; border-radius: 999px; padding: 4px 10px; font-size: .8rem; font-weight: 700; letter-spacing: .3px; cursor: pointer; min-height: 30px; }

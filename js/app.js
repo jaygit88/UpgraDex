@@ -7,6 +7,7 @@ import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from
 import * as store from './store.js';
 import * as sync from './sync.js';
 import { IS_TEST, KEY_PREFIX } from './env.js';
+import { BUILD } from './version.js';
 import { ScanScreen, ScannerSettings } from './scan.js';
 import { BudgetScreen } from './budget.js';
 import { SummaryScreen } from './summary.js';
@@ -919,6 +920,14 @@ function Toast({ t, onDone }) {
   </div>`;
 }
 
+function VersionTag() {
+  const when = BUILD.date ? new Date(BUILD.date) : null;
+  const detail = when
+    ? `UpgraDex${IS_TEST ? ' Test' : ''} ${BUILD.label} · updated ${when.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} at ${when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    : 'Development version';
+  return html`<button class="version-tag" title=${detail} aria-label=${`Version ${BUILD.label}`} onClick=${() => toast({ msg: detail })}>${BUILD.label}</button>`;
+}
+
 function App() {
   const route = useRoute();
   const [sheet, setSheet] = useState(null);
@@ -930,7 +939,10 @@ function App() {
   return html`<div class="app">
     <header class="top">
       <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar-art.png" alt="" width="40" height="41" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
-      <${SyncStatusDot} />
+      <div class="top-right">
+        <${SyncStatusDot} />
+        <${VersionTag} />
+      </div>
     </header>
     <div class="screens">
       <${Screen} active=${route.name === 'dex'}><${DexScreen} /></${Screen}>
