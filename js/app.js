@@ -899,7 +899,7 @@ function App() {
   const tab = ['shop', 'scan', 'settings'].includes(route.name) ? route.name : 'dex';
   return html`<div class="app">
     <header class="top">
-      <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar.png" alt="" width="36" height="35" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
+      <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar-art.png" alt="" width="40" height="41" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
       <${SyncStatusDot} />
     </header>
     <div class="screens">

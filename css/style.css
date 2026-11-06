@@ -332,7 +332,7 @@ label.check input { width: 22px; height: 22px; }
 .sticky-actions { position: sticky; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 8px); background: var(--bg); padding: 8px 0; z-index: 2; }
 .tabs a span { font-size: .75rem; }
 
-.brand-icon { width: 36px; height: auto; image-rendering: pixelated; flex: none; margin: -4px 0; }
+.brand-icon { width: 40px; height: auto; flex: none; margin: -6px 0; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
 
 .scan-gif { display: block; width: min(320px, 80%); height: auto; margin: 0 auto 4px; }
 .scan-working p { font-weight: 600; }
