@@ -921,7 +921,17 @@ function App() {
   </div>`;
 }
 
+const SPLASH_MIN_MS = 1500; // keep the Falinks on screen long enough to see them march
+
+function hideSplash() {
+  const el = document.getElementById('splash');
+  if (!el) return;
+  el.classList.add('hide');
+  setTimeout(() => el.remove(), 400);
+}
+
 async function main() {
+  const started = performance.now();
   if (IS_TEST) {
     document.documentElement.classList.add('is-test');
     document.title = 'UpgraDex Test';
@@ -930,6 +940,7 @@ async function main() {
     await loadStaticData();
   } catch (e) {
     document.getElementById('app').innerHTML = '<p style="padding:2rem">Could not load the app data. Check your connection and reload.</p>';
+    hideSplash();
     return;
   }
 
@@ -944,6 +955,7 @@ async function main() {
   }
 
   render(html`<${App} />`, document.getElementById('app'));
+  setTimeout(hideSplash, Math.max(0, SPLASH_MIN_MS - (performance.now() - started)));
   sync.startSync();
 
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
