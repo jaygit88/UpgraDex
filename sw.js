@@ -1,5 +1,5 @@
 // Service worker: keeps the app working offline (e.g. in a shop with bad signal).
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `shell-${VERSION}`;
 const SPRITES = 'sprites-v1';
 const SDK = 'sdk-v1';
@@ -7,7 +7,7 @@ const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/app.js', 'js/api.js', 'js/data.js', 'js/idb.js', 'js/price.js', 'js/rarity.js', 'js/store.js', 'js/sync.js',
   'vendor/preact-htm.js', 'data/pokedex.json', 'data/sets.json',
-  'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
+  'icons/favicon-64.png', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (e) => {
