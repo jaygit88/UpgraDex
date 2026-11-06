@@ -2,7 +2,7 @@
 // Rarity decides first (rarer = upgrade); when the rarity is the same, price decides.
 
 import { html, useEffect, useState } from '../vendor/preact-htm.js';
-import { getPrices } from './api.js';
+import { getPrices, priceKey } from './api.js';
 import { valueOf, useRates, money, sumCurrency } from './price.js';
 import { rarityRank, rarityLabel } from './rarity.js';
 import * as store from './store.js';
@@ -11,16 +11,18 @@ import { BY_DEX } from './data.js';
 const LANG_NAMES = { EN: 'English', JP: 'Japanese', KR: 'Korean' };
 const SAME_PRICE_BAND = 0.2; // within 20% counts as "about the same"
 
-async function priceOf(card, settings, rates) {
-  if (!card || !card.id || card.custom) return null;
-  try { return valueOf(await getPrices(card.id), settings, rates); } catch { return null; }
+async function pricesOf(card) {
+  const key = priceKey(card);
+  if (!key) return null;
+  try { return await getPrices(key); } catch { return null; }
 }
 
 // kind: have | listed | missing | unpicked | upgrade | not-upgrade | similar
-export async function verdictFor(dex, card, lang, settings, rates) {
+export async function verdictFor(dex, cardIn, lang, settings, rates) {
+  let card = cardIn;
   const e = store.getEntry(dex);
   const name = BY_DEX.get(+dex)?.name || 'this Pokémon';
-  const owned = e.owned;
+  let owned = e.owned;
   if (owned && !owned.unknown && store.sameCard(owned, card)) {
     if (owned.lang && lang && owned.lang !== lang) {
       return { kind: 'similar', title: 'Same card as yours', detail: `Yours is ${LANG_NAMES[owned.lang]}, this one is ${LANG_NAMES[lang]}.` };
@@ -32,20 +34,33 @@ export async function verdictFor(dex, card, lang, settings, rates) {
   if (!owned) return { kind: 'missing', title: `Missing Pokémon — grab it!`, detail: `You haven't got any ${name} card yet. Any card fills the gap.` };
   if (owned.unknown) return { kind: 'unpicked', title: `You've got a ${name} already`, detail: "Pick which card you've got (on the Pokémon's page) and the app can tell you if this one's better." };
 
-  const [mine, theirs] = await Promise.all([priceOf(owned, settings, rates), priceOf(card, settings, rates)]);
+  const [pm, pt] = await Promise.all([pricesOf(owned), pricesOf(card)]);
+  const mine = pm ? valueOf(pm, settings, rates) : null;
+  const theirs = pt ? valueOf(pt, settings, rates) : null;
+  // Japanese cards get their rarity from the same lookup as their price.
+  owned = { ...owned, rarity: owned.rarity || pm?.rarity || '' };
+  card = { ...card, rarity: card.rarity || pt?.rarity || '' };
+  const known = (r) => r && r !== 'None';
   const rMine = rarityRank(owned.rarity), rNew = rarityRank(card.rarity);
   const compare = { mine: { card: owned, price: mine }, theirs: { card, price: theirs } };
-  if (rNew > rMine) {
+  // Rarity first — but only when both rarities are known (some Japanese cards have none); otherwise price decides.
+  const byRarity = known(owned.rarity) && known(card.rarity);
+  if (byRarity && rNew > rMine) {
     return { kind: 'upgrade', title: 'Upgrade!', detail: `${rarityLabel(card.rarity)} is rarer than your ${rarityLabel(owned.rarity)}.`, compare };
   }
-  if (rNew < rMine) {
+  if (byRarity && rNew < rMine) {
     return { kind: 'not-upgrade', title: 'Not an upgrade', detail: `Your ${rarityLabel(owned.rarity)} is rarer than this ${rarityLabel(card.rarity)}.`, compare };
   }
   if (mine != null && theirs != null) {
-    if (theirs > mine * (1 + SAME_PRICE_BAND)) return { kind: 'upgrade', title: 'Upgrade!', detail: 'Same rarity as yours, but worth more.', compare };
-    if (theirs < mine * (1 - SAME_PRICE_BAND)) return { kind: 'not-upgrade', title: 'Not an upgrade', detail: 'Same rarity as yours, and yours is worth more.', compare };
+    if (theirs > mine * (1 + SAME_PRICE_BAND)) return { kind: 'upgrade', title: 'Upgrade!', detail: byRarity ? 'Same rarity as yours, but worth more.' : 'Worth more than yours.', compare };
+    if (theirs < mine * (1 - SAME_PRICE_BAND)) return { kind: 'not-upgrade', title: 'Not an upgrade', detail: byRarity ? 'Same rarity as yours, and yours is worth more.' : 'Yours is worth more.', compare };
   }
-  return { kind: 'similar', title: 'About the same as yours', detail: `Same rarity (${rarityLabel(card.rarity)})${mine != null && theirs != null ? ' and a similar price' : ''}.`, compare };
+  if (!byRarity && mine != null && theirs != null) {
+    if (theirs > mine * (1 + SAME_PRICE_BAND)) return { kind: 'upgrade', title: 'Upgrade!', detail: 'Worth more than yours.', compare };
+    if (theirs < mine * (1 - SAME_PRICE_BAND)) return { kind: 'not-upgrade', title: 'Not an upgrade', detail: 'Yours is worth more.', compare };
+    return { kind: 'similar', title: 'About the same as yours', detail: 'A similar price to yours.', compare };
+  }
+  return { kind: 'similar', title: 'About the same as yours', detail: byRarity ? `Same rarity (${rarityLabel(card.rarity)})${mine != null && theirs != null ? ' and a similar price' : ''}.` : "Can't compare these two yet.", compare };
 }
 
 const ICONS = { have: '✓', listed: '★', missing: '!', unpicked: '?', upgrade: '⬆', 'not-upgrade': '✕', similar: '≈' };

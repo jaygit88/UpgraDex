@@ -2,6 +2,7 @@
 
 import { html, useState, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, SETS, pad } from './data.js';
+import { priceKey } from './api.js';
 import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote } from './price.js';
 import { rarityLabel } from './rarity.js';
 import * as store from './store.js';
@@ -69,8 +70,8 @@ function Planner({ entries }) {
   const [strategy, setStrategy] = useSession('strategy', 'best');
 
   const ups = useMemo(() => allUpgrades(entries).filter((u) => !u.slot.custom && (which === 'all' || u.rank === 1)), [entries, which]);
-  const priceState = usePriceMap(ups.map((u) => u.slot.id));
-  const candidates = ups.map((u) => ({ ...u, price: valueOf(priceState.prices.get(u.slot.id), settings, rates) })).filter((u) => u.price != null);
+  const priceState = usePriceMap(ups.map((u) => priceKey(u.slot)));
+  const candidates = ups.map((u) => ({ ...u, price: valueOf(priceState.prices.get(priceKey(u.slot)), settings, rates) })).filter((u) => u.price != null);
   const unpriced = priceState.loading ? 0 : ups.length - candidates.length;
   const budget = Math.max(0, Number(amount) || 0);
   const plan = planBudget(candidates, budget, strategy);

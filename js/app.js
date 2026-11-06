@@ -1,8 +1,8 @@
 import { html, render, useState, useEffect, useMemo, useRef, useLayoutEffect } from '../vendor/preact-htm.js';
-import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardPicture, GENS } from './data.js';
-import { getCardsFor } from './api.js';
+import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardPicture, GENS, CATALOGUES, LANG_FOR_CAT, intlCardsFor, intlCount } from './data.js';
+import { getCardsFor, priceKey, peekPrices } from './api.js';
 import { idbClear } from './idb.js';
-import { PriceTag, PriceBlock } from './price.js';
+import { PriceTag, PriceBlock, usePrices } from './price.js';
 import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from './rarity.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -22,7 +22,7 @@ function parseRoute(hash) {
   const parts = hash.replace(/^#\/?/, '').split('/');
   if (parts[0] === 'p' && BY_DEX.has(+parts[1])) {
     const dex = +parts[1];
-    if (parts[2] === 'cards') return { name: 'picker', dex, purpose: parts[3] || 'browse' };
+    if (parts[2] === 'cards') return { name: 'picker', dex, purpose: parts[3] || 'browse', cat: ['ja', 'ko'].includes(parts[4]) ? parts[4] : '' };
     return { name: 'pokemon', dex };
   }
   if (parts[0] === 'shop') return { name: 'shop' };
@@ -304,9 +304,12 @@ function PokemonScreen({ dex }) {
           <div class="slot-name">${e.owned.name}</div>
           <div class="muted small">${setLine(e.owned)}</div>
           <div class="row-wrap"><${RarityChip} rarity=${e.owned.rarity} /></div>
-          <${LangPicker} value=${e.owned.lang} onChange=${(l) => setLang(dex, 'owned', l)} />
+          ${e.owned.cat
+            ? html`<div class="row-wrap"><${LangBadge} lang=${e.owned.lang} /> <span class="small muted">${e.owned.cat === 'ja' ? 'Japanese' : 'Korean'} card</span></div>`
+            : html`<${LangPicker} value=${e.owned.lang} onChange=${(l) => setLang(dex, 'owned', l)} />`}
+          ${e.owned.lang === 'JP' && !e.owned.cat && html`<a class="jp-hint small" href=${`#/p/${dex}/cards/owned/ja`}>Pick the actual Japanese card to see its real price ›</a>`}
           <div class="row-wrap">
-            <a class="btn small" href=${`#/p/${dex}/cards/owned`}>Change</a>
+            <a class="btn small" href=${`#/p/${dex}/cards/owned${e.owned.cat ? '/' + e.owned.cat : ''}`}>Change</a>
           </div>
         </div>
       </div>`
@@ -334,8 +337,8 @@ function PokemonScreen({ dex }) {
         <div class="slot-info">
           <div class="slot-name">${u.name}</div>
           <div class="muted small">${setLine(u)}</div>
-          <div class="row-wrap"><${RarityChip} rarity=${u.rarity} /> ${!u.custom && html`<${PriceTag} id=${u.id} lang=${u.lang} />`}</div>
-          <${LangPicker} value=${u.lang} onChange=${(l) => setLang(dex, i, l)} />
+          <div class="row-wrap"><${RarityChip} rarity=${u.rarity} /> ${!u.custom && html`<${PriceTag} id=${priceKey(u)} lang=${u.lang} cat=${u.cat} />`}</div>
+          ${u.cat ? html`<div class="row-wrap"><${LangBadge} lang=${u.lang} /></div>` : html`<${LangPicker} value=${u.lang} onChange=${(l) => setLang(dex, i, l)} />`}
           <div class="row-wrap">
             <button class="btn small success" onClick=${() => gotIt(dex, i)}>Got it! 🎉</button>
             <button class="icon-btn small" disabled=${i === 0} onClick=${() => moveUpgrade(dex, i, -1)} aria-label="Move up"><${Icon} name="up" /></button>
@@ -369,7 +372,7 @@ function searchWords(text) {
 function cardMatches(c, words) {
   if (!words.length) return true;
   const year = c.date && !c.date.startsWith('9999') ? c.date.slice(0, 4) : '';
-  const hay = fold([c.name, c.set, SETS[c.setId]?.a, SETS[c.setId]?.sn, rarityLabel(c.rarity), year].join(' '));
+  const hay = fold([c.name, c.set, c.code || SETS[c.setId]?.a, c.cat ? '' : SETS[c.setId]?.sn, c.rarity ? rarityLabel(c.rarity) : '', year].join(' '));
   const num = fold(c.num).replace(/^([a-z]*)0+(\d)/, '$1$2');
   return words.every((w) => {
     if (/^\d+(\/\d+)?$/.test(w)) {
@@ -380,22 +383,30 @@ function cardMatches(c, words) {
   });
 }
 
-function PickerScreen({ dex, purpose }) {
+function PickerScreen({ dex, purpose, cat: routeCat }) {
   const entries = store.useCollection();
   const settings = store.useSettings();
   const p = BY_DEX.get(dex);
   const e = entries[dex] || store.EMPTY;
   const [state, setState] = useState({ loading: true, cards: [] });
+  // Which cards to list: English (''), Japanese ('ja') or Korean ('ko').
+  // Picking his own card for a Pokémon he's tagged Japanese starts on the Japanese cards.
+  const [cat, setCat] = useState(routeCat || (purpose === 'owned' && e.owned?.lang === 'JP' && !e.owned?.cat ? 'ja' : e.owned?.cat && purpose === 'owned' ? e.owned.cat : ''));
+  const [koCount, setKoCount] = useState(0);
+  useEffect(() => { intlCount('ko', dex).then(setKoCount); }, [dex]);
   const [fancy, setFancy] = useSessionState('pick.fancy', false);
   const [rarity, setRarity] = useState('');
   const [text, setText] = useState('');
   const [sort, setSort] = useSessionState('pick.sort', 'new');
 
   const load = (force) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    getCardsFor(dex, p.name, { force }).then((r) => setState({ loading: false, ...r }));
+    setState((s) => ({ ...s, loading: true, error: null, cards: s.cat === cat ? s.cards : [] }));
+    const job = cat
+      ? intlCardsFor(cat, dex).then((cards) => ({ cards }), () => ({ cards: [], error: `Couldn't load the ${CATALOGUES[cat]} cards – check your connection.` }))
+      : getCardsFor(dex, p.name, { force });
+    job.then((r) => setState({ loading: false, cat, ...r }));
   };
-  useEffect(() => { setRarity(''); setText(''); load(false); }, [dex]);
+  useEffect(() => { setRarity(''); setText(''); load(false); }, [dex, cat]);
 
   const rarities = useMemo(() => {
     const m = new Map();
@@ -406,11 +417,11 @@ function PickerScreen({ dex, purpose }) {
   const shown = useMemo(() => {
     const words = searchWords(text);
     let list = state.cards.filter((c) =>
-      (!fancy || rarityRank(c.rarity) >= FANCY_MIN_RANK) && (!rarity || c.rarity === rarity) && cardMatches(c, words));
+      (cat || ((!fancy || rarityRank(c.rarity) >= FANCY_MIN_RANK) && (!rarity || c.rarity === rarity))) && cardMatches(c, words));
     if (sort === 'old') list = [...list].reverse();
     if (sort === 'rarity') list = [...list].sort((a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || b.date.localeCompare(a.date));
     return list;
-  }, [state.cards, fancy, rarity, text, sort]);
+  }, [state.cards, fancy, rarity, text, sort, cat]);
 
   const title = purpose === 'owned' ? `Which ${p.name} do you have?`
     : purpose === 'up' ? `Pick an upgrade for ${p.name}` : `${p.name} cards`;
@@ -425,6 +436,13 @@ function PickerScreen({ dex, purpose }) {
       </div>
       <button class="icon-btn" onClick=${() => load(true)} aria-label="Refresh card list"><${Icon} name="refresh" /></button>
     </div>
+    <div class="seg cat-switch" role="tablist" aria-label="Card language">
+      <button role="tab" aria-selected=${cat === ''} class=${cat === '' ? 'on' : ''} onClick=${() => setCat('')}>English cards</button>
+      <button role="tab" aria-selected=${cat === 'ja'} class=${cat === 'ja' ? 'on' : ''} onClick=${() => setCat('ja')}>Japanese cards</button>
+      ${koCount > 0 && html`<button role="tab" aria-selected=${cat === 'ko'} class=${cat === 'ko' ? 'on' : ''} onClick=${() => setCat('ko')}>Korean cards</button>`}
+    </div>
+    ${cat && !state.loading && html`<p class="muted small">${state.cards.length} ${CATALOGUES[cat]} ${p.name} cards, ${state.cards.filter((c) => c.img).length} with pictures. Tap one to see its ${CATALOGUES[cat]} price.
+      ${cat === 'ja' ? ' Japanese sets are numbered differently from English ones — match the set code and number in the bottom corner (e.g. SV8a 217/187).' : ''}</p>`}
     ${purpose === 'owned' && html`<label class="check">
       <input type="checkbox" checked=${settings.fastSetup} onChange=${(ev) => store.updateSettings({ fastSetup: ev.currentTarget.checked })} />
       Fast setup: after picking, jump straight to the next Pokémon
@@ -436,10 +454,10 @@ function PickerScreen({ dex, purpose }) {
       </select>
     </div>
     <div class="chips">
-      <button class=${`chip ${fancy ? 'on' : ''}`} onClick=${() => setFancy(!fancy)}>✨ Special only</button>
+${!cat && html`<button class=${`chip ${fancy ? 'on' : ''}`} onClick=${() => setFancy(!fancy)}>✨ Special only</button>
       <button class=${`chip ${!rarity ? 'on' : ''}`} onClick=${() => setRarity('')}>All rarities</button>
       ${rarities.map(([r, n]) => html`<button class=${`chip ${rarity === r ? 'on' : ''}`} onClick=${() => setRarity(rarity === r ? '' : r)}>
-        ${rarityLabel(r)} <span class="muted">${n}</span></button>`)}
+        ${rarityLabel(r)} <span class="muted">${n}</span></button>`)}`}
     </div>
     ${state.loading && state.cards.length === 0 && html`<div class="loading-cards">
       <div class="gastly-box"><img src="icons/loading-gastly.gif" alt="" width="500" height="500" /></div>
@@ -547,7 +565,7 @@ function ShopScreen() {
             <div class="muted small">${setLine(u)}</div>
             <div class="row-wrap"><${RarityChip} rarity=${u.rarity} /><${LangBadge} lang=${u.lang} /></div>
           </div>
-          ${!u.custom && html`<${PriceTag} id=${u.id} lang=${u.lang} />`}
+          ${!u.custom && html`<${PriceTag} id=${priceKey(u)} lang=${u.lang} cat=${u.cat} />`}
         </button>`;
       })}
     </div>
@@ -794,12 +812,15 @@ function Sheet({ sheet }) {
 }
 
 function CardDetails({ card }) {
-  const s = SETS[card.setId];
+  const s = card.cat ? null : SETS[card.setId];
+  const code = card.cat ? card.code || card.setId : s?.a;
+  const looked = usePrices(card.cat && !card.rarity ? priceKey(card) : null);
+  const rarity = card.rarity || looked?.rarity || '';
   return html`<div class="card-details">
     <h2>${card.name}</h2>
-    <div>${card.set}${s?.a ? ` (${s.a})` : ''}</div>
-    <div class="muted small">${[card.num ? `Card #${card.num}` : '', card.date && !card.date.startsWith('9999') ? `Released ${card.date}` : '', s?.sn].filter(Boolean).join(' · ')}</div>
-    <div class="row-wrap"><${RarityChip} rarity=${card.rarity} /></div>
+    <div>${card.set}${code ? ` (${code})` : ''}${card.cat ? html` <${LangBadge} lang=${LANG_FOR_CAT[card.cat]} />` : ''}</div>
+    <div class="muted small">${[card.num ? `Card #${card.num}${card.total ? '/' + card.total : ''}` : '', card.date && !card.date.startsWith('9999') ? `Released ${card.date}` : '', s?.sn].filter(Boolean).join(' · ')}</div>
+    <div class="row-wrap"><${RarityChip} rarity=${rarity} /></div>
   </div>`;
 }
 
@@ -807,7 +828,9 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
   store.useCollection();
   const settings = store.useSettings();
   const e = store.getEntry(dex);
-  const [lang, setLang] = useState(initialLang || settings.defaultLang || 'EN');
+  const fixedLang = card.cat ? LANG_FOR_CAT[card.cat] : null; // a Japanese card is Japanese
+  const [lang, setLang] = useState(fixedLang || initialLang || settings.defaultLang || 'EN');
+  const extra = () => ({ rarity: peekPrices(priceKey(card))?.rarity || '' });
   const isOwned = store.sameCard(e.owned, card);
   const upIdx = e.ups.findIndex((u) => store.sameCard(u, card));
   const full = e.ups.length >= MAX_UPS;
@@ -815,7 +838,7 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
   const setOwned = () => {
     const before = store.getEntry(dex);
     store.updateEntry(dex, (x) => {
-      x.owned = store.slotFromCard(card, lang);
+      x.owned = store.slotFromCard(card, lang, extra());
       x.ups = x.ups.filter((u) => !store.sameCard(u, card));
       return x;
     });
@@ -826,7 +849,7 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
   };
 
   const addUp = () => {
-    store.updateEntry(dex, (x) => { x.ups.push(store.slotFromCard(card, lang)); return x; });
+    store.updateEntry(dex, (x) => { x.ups.push(store.slotFromCard(card, lang, extra())); return x; });
     toast({ msg: `Added as upgrade #${e.ups.length + 1}` });
     go(`#/p/${dex}`);
   };
@@ -840,9 +863,9 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
     <div class="sheet-img"><${CardImage} card=${card} q="high" /></div>
     <div class="sheet-info">
       <${CardDetails} card=${card} />
-      <div class="field"><span class="small muted">Language of the card</span><${LangPicker} value=${lang} onChange=${setLang} /></div>
+      ${fixedLang ? '' : html`<div class="field"><span class="small muted">Language of the card</span><${LangPicker} value=${lang} onChange=${setLang} /></div>`}
       <div class="row-wrap actions">${primaryOwned ? [ownedBtn, upBtn] : [upBtn, ownedBtn]}</div>
-      <${PriceBlock} id=${card.id} lang=${lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />
+      <${PriceBlock} id=${priceKey(card)} cat=${card.cat} lang=${lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />
     </div>
   </div>`;
 }
@@ -857,7 +880,7 @@ function SlotSheet({ dex, where }) {
     <div class="sheet-info">
       <div class="muted">${pad(dex)} ${speciesName(dex)} · ${where === 'owned' ? 'My card' : `Upgrade #${where + 1}`}</div>
       <${CardDetails} card=${card} />
-      <div class="field"><span class="small muted">Language</span><${LangPicker} value=${card.lang} onChange=${(l) => setLang(dex, where, l)} /></div>
+      ${card.cat ? '' : html`<div class="field"><span class="small muted">Language</span><${LangPicker} value=${card.lang} onChange=${(l) => setLang(dex, where, l)} /></div>`}
       <div class="row-wrap actions">
         ${where === 'owned'
           ? html`<a class="btn" href=${`#/p/${dex}/cards/owned`}>Change card</a>`
@@ -865,7 +888,7 @@ function SlotSheet({ dex, where }) {
                  <button class="btn" onClick=${() => { removeUpgrade(dex, where); closeSheet(); }}>Remove</button>`}
         <a class="btn" href=${`#/p/${dex}`}>Open ${speciesName(dex)}</a>
       </div>
-      ${!card.custom && html`<${PriceBlock} id=${card.id} lang=${card.lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />`}
+      ${!card.custom && html`<${PriceBlock} id=${priceKey(card)} cat=${card.cat} lang=${card.lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />`}
     </div>
   </div>`;
 }
@@ -947,7 +970,7 @@ function App() {
     <div class="screens">
       <${Screen} active=${route.name === 'dex'}><${DexScreen} /></${Screen}>
       ${route.name === 'pokemon' && html`<${Screen} active key=${'p' + route.dex}><${PokemonScreen} dex=${route.dex} /></${Screen}>`}
-      ${route.name === 'picker' && html`<${Screen} active key=${'c' + route.dex + route.purpose}><${PickerScreen} dex=${route.dex} purpose=${route.purpose} /></${Screen}>`}
+      ${route.name === 'picker' && html`<${Screen} active key=${'c' + route.dex + route.purpose + route.cat}><${PickerScreen} dex=${route.dex} purpose=${route.purpose} cat=${route.cat} /></${Screen}>`}
       ${route.name === 'shop' && html`<${Screen} active><${ShopScreen} /></${Screen}>`}
       ${route.name === 'scan' && html`<${Screen} active><${ScanScreen} /></${Screen}>`}
       ${route.name === 'budget' && html`<${Screen} active><${BudgetScreen} /></${Screen}>`}

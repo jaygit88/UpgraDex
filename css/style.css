@@ -461,3 +461,7 @@ label.inline input, label.inline select { width: 80px; margin: 0; }
 .likely-badge { background: #dbeafe; color: #1e4f91; }
 .guess-badge { background: #fff3c4; color: #5c4400; }
 @media (prefers-color-scheme: dark) { .likely-badge { background: #1b2f4f; color: #a8cbff; } .guess-badge { background: #3b3010; color: #f5dc8a; } }
+.ok-note { background: #dcf5e6; color: #11663a; }
+@media (prefers-color-scheme: dark) { .ok-note { background: #173d29; color: #8ee4b0; } }
+.jp-hint { display: inline-block; margin: 4px 0; font-weight: 600; }
+.cat-switch { margin: 4px 0 8px; }

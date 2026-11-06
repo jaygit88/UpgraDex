@@ -2,6 +2,7 @@
 
 import { html, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, GENS, pad } from './data.js';
+import { priceKey } from './api.js';
 import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote } from './price.js';
 import { rarityLabel, rarityRank } from './rarity.js';
 import * as store from './store.js';
@@ -31,12 +32,12 @@ export function SummaryScreen() {
   const picked = owned.filter((x) => !x.e.owned.unknown);
   const priceable = picked.filter((x) => x.e.owned.id && !x.e.owned.custom);
   const topPicks = useMemo(() => POKEDEX.map((p) => entries[p.dex]?.ups?.[0]).filter((u) => u && !u.custom), [entries]);
-  const priceState = usePriceMap([...priceable.map((x) => x.e.owned.id), ...topPicks.map((u) => u.id)]);
+  const priceState = usePriceMap([...priceable.map((x) => priceKey(x.e.owned)), ...topPicks.map((u) => priceKey(u))]);
 
-  const valued = priceable.map((x) => ({ ...x, value: valueOf(priceState.prices.get(x.e.owned.id), settings, rates) })).filter((x) => x.value != null);
+  const valued = priceable.map((x) => ({ ...x, value: valueOf(priceState.prices.get(priceKey(x.e.owned)), settings, rates) })).filter((x) => x.value != null);
   const total = valued.reduce((s, x) => s + x.value, 0);
   const top5 = [...valued].sort((a, b) => b.value - a.value).slice(0, 5);
-  const wishCost = topPicks.reduce((s, u) => s + (valueOf(priceState.prices.get(u.id), settings, rates) ?? 0), 0);
+  const wishCost = topPicks.reduce((s, u) => s + (valueOf(priceState.prices.get(priceKey(u)), settings, rates) ?? 0), 0);
 
   // Breakdowns
   const byRarity = new Map();

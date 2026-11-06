@@ -4,8 +4,8 @@
 //   Catalogue   – a binder page of up to 16 cards, Claude Sonnet 5.5: save them all as "my card".
 
 import { html, useState, useRef, useMemo } from '../vendor/preact-htm.js';
-import { POKEDEX, BY_DEX, SETS, pad } from './data.js';
-import { getCardsFor } from './api.js';
+import { POKEDEX, BY_DEX, SETS, pad, CAT_FOR_LANG, intlCardsFor } from './data.js';
+import { getCardsFor, priceKey } from './api.js';
 import { PriceBlock } from './price.js';
 import * as store from './store.js';
 import { IS_TEST } from './env.js';
@@ -105,8 +105,8 @@ export function rankCards(det, cards) {
   const scored = cards.map((c, i) => {
     const set = SETS[c.setId];
     const numHit = !!num && normNum(c.num) === num;
-    const codeHit = !!code && norm(set?.a) === code;
-    const totalHit = !!total && !!set?.o && String(set.o) === total;
+    const codeHit = !!code && norm(c.code || set?.a) === code; // Japanese cards: the set id is the printed code (e.g. SV8a)
+    const totalHit = !!total && String(c.total || set?.o || '') === total;
     let s = 0;
     if (numHit) s += 4;
     if (codeHit) s += 3;
@@ -128,8 +128,17 @@ export function rankCards(det, cards) {
 export async function matchDetection(det) {
   const p = findPokemon(det);
   if (!p) return { det, p: null, best: null, candidates: [], sure: false };
+  // A Japanese (or Korean) card is matched against that language's cards first: they're different printings
+  // with their own set codes and numbers (e.g. Terastal Festival sv8a 217/187), and their own prices.
+  const cat = CAT_FOR_LANG[det.language];
+  if (cat) {
+    try {
+      const intl = await intlCardsFor(cat, p.dex);
+      if (intl.length) return { det, p, cat, loadError: null, ...rankCards(det, intl) };
+    } catch {}
+  }
   const { cards, error } = await getCardsFor(p.dex, p.name);
-  return { det, p, loadError: cards.length ? null : error || `No ${p.name} cards found in the card database.`, ...rankCards(det, cards) };
+  return { det, p, cat: '', loadError: cards.length ? null : error || `No ${p.name} cards found in the card database.`, ...rankCards(det, cards) };
 }
 
 export const langOf = (det) => (['EN', 'JP', 'KR'].includes(det.language) ? det.language : 'EN');
@@ -291,7 +300,7 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
           <button class="btn primary" onClick=${() => openSheet({ kind: 'pick', dex: m.p.dex, card: chosen, purpose: 'up', lang })}>Add or save…</button>
           <button class="btn" onClick=${onAgain}><${Icon} name="camera" /> Scan another</button>
         </div>
-        <${PriceBlock} id=${chosen.id} lang=${lang} name=${chosen.name} query=${`${chosen.name} ${chosen.num} ${chosen.set}`} />
+        <${PriceBlock} id=${priceKey(chosen)} cat=${chosen.cat} lang=${lang} name=${chosen.name} query=${`${chosen.name} ${chosen.num} ${chosen.set}`} />
       </div>
     </div>`}
 
@@ -300,9 +309,9 @@ function QuickResult({ matches, preview, onAgain, onDone }) {
     ${m.p && !m.loadError && !chosen && html`<p>Couldn't find the exact card — pick it below.</p>`}
 
     ${m.p && !m.loadError && html`<details class="cand-box" open=${showAll} onToggle=${(e) => setShowAll(e.currentTarget.open)}>
-      <summary><b>Not the right card?</b> Choose from ${m.candidates.length} ${m.p.name} cards</summary>
+      <summary><b>Not the right card?</b> Choose from ${m.candidates.length} ${m.cat === 'ja' ? 'Japanese ' : m.cat === 'ko' ? 'Korean ' : ''}${m.p.name} cards</summary>
       <${Candidates} m=${m} chosen=${chosen} onChoose=${(c) => { setChosen(c); setShowAll(false); }} />
-      <p class="small"><a href=${`#/p/${m.p.dex}/cards`}>Open the full ${m.p.name} card list</a></p>
+      <p class="small"><a href=${`#/p/${m.p.dex}/cards/browse${m.cat ? '/' + m.cat : ''}`}>Open the full ${m.p.name} card list</a></p>
     </details>`}
 
     <p><button class="btn" onClick=${onDone}>Done</button></p>

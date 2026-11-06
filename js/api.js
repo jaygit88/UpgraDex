@@ -139,7 +139,7 @@ const good = (v) => (typeof v === 'number' && v > 0 ? v : null);
 
 export function extractPrices(card) {
   const p = card.pricing || {};
-  const out = { updated: null, cm: null, tp: null };
+  const out = { updated: null, cm: null, tp: null, rarity: card.rarity && card.rarity !== 'None' ? card.rarity : '' };
   const cm = p.cardmarket;
   if (cm) {
     out.cm = {
@@ -173,6 +173,12 @@ export function extractPrices(card) {
   return out;
 }
 
+// The id prices are looked up by: plain for English cards, "ja:<id>" / "ko:<id>" for Japanese/Korean ones.
+export function priceKey(card) {
+  if (!card || !card.id || card.custom) return null;
+  return card.cat ? `${card.cat}:${card.id}` : card.id;
+}
+
 export function peekPrices(id) {
   return priceMemory.get(id);
 }
@@ -188,7 +194,9 @@ export async function getPrices(id, { maxAge = PRICE_TTL } = {}) {
   if (cached && Date.now() - cached.t < maxAge) { priceMemory.set(id, cached); return cached; }
   try {
     const value = await enqueue(async () => {
-      const r = await fetch(`${BASE}/en/cards/${encodeURIComponent(id)}`);
+      // "ja:SV8a-217" = a Japanese card; plain ids are English.
+      const [lang, cardId] = id.includes(':') ? id.split(':') : ['en', id];
+      const r = await fetch(`${BASE}/${lang}/cards/${encodeURIComponent(cardId)}`);
       if (!r.ok) throw new Error(`Price lookup failed (${r.status})`);
       const card = await r.json();
       return { t: Date.now(), ...extractPrices(card) };

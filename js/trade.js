@@ -3,7 +3,7 @@
 
 import { html, useState, useRef, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, pad, spriteUrl } from './data.js';
-import { getCardsFor } from './api.js';
+import { getCardsFor, priceKey } from './api.js';
 import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote } from './price.js';
 import * as store from './store.js';
 import { CardImage, LangPicker, setLine, Icon } from './app.js';
@@ -60,7 +60,7 @@ function Side({ side, title, items, total, cur, adding, ready, onScan, onFind, o
     ${items.length === 0 && !adding && html`<p class="muted small">No cards added yet.</p>`}
     <div class="trade-items">
       ${items.map((it) => {
-        const v = valueOf(prices.get(it.card.id), settings, rates);
+        const v = valueOf(prices.get(priceKey(it.card)), settings, rates);
         return html`<div class="trade-item" key=${it.key}>
           <${CardImage} card=${it.card} className="thumb" />
           <div class="grow">
@@ -91,10 +91,10 @@ export function TradeCheck({ ready, onDone }) {
   const fileRef = useRef(null);
   const scanSide = useRef(null); // which side the photo being taken is for
 
-  const ids = useMemo(() => [...items.his, ...items.theirs].map((x) => x.card.id), [items]);
+  const ids = useMemo(() => [...items.his, ...items.theirs].map((x) => priceKey(x.card)), [items]);
   const priceState = usePriceMap(ids);
-  const totalOf = (side) => items[side].reduce((s, x) => s + (valueOf(priceState.prices.get(x.card.id), settings, rates) ?? 0), 0);
-  const unpriced = [...items.his, ...items.theirs].filter((x) => !priceState.loading && valueOf(priceState.prices.get(x.card.id), settings, rates) == null).length;
+  const totalOf = (side) => items[side].reduce((s, x) => s + (valueOf(priceState.prices.get(priceKey(x.card)), settings, rates) ?? 0), 0);
+  const unpriced = [...items.his, ...items.theirs].filter((x) => !priceState.loading && valueOf(priceState.prices.get(priceKey(x.card)), settings, rates) == null).length;
 
   const add = (side, it) => {
     setItems((s) => ({ ...s, [side]: [...s[side], { ...it, key: nextKey++ }] }));

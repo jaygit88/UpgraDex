@@ -30,6 +30,10 @@ The `test` branch is published at https://jaygit88.github.io/UpgraDex/test/ as *
 Some cards have no picture on TCGdex. `data/extra-images.json` maps those to pictures on pokemontcg.io
 (rebuild with `node scripts/build-extra-images.mjs`).
 
+Japanese (and the few Korean) cards come from TCGdex's Japanese/Korean catalogues, indexed by Pokémon in
+`data/cards-ja.json` / `data/sets-ja.json` (rebuild with `node scripts/build-intl.mjs`). They have their own
+Cardmarket/TCGplayer prices.
+
 To refresh `data/pokedex.json` and `data/sets.json` (e.g. when new sets or Pokémon come out):
 
 ```bash

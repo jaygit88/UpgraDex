@@ -103,15 +103,17 @@ export function useCollection() {
 
 // ---------- Slots ----------
 
-export function slotFromCard(card, lang = 'EN') {
-  return {
-    id: card.id, name: card.name, img: card.img || '', rarity: card.rarity || '',
+export function slotFromCard(card, lang = 'EN', extra = {}) {
+  const slot = {
+    id: card.id, name: card.name, img: card.img || '', rarity: [card.rarity, extra.rarity].find((r) => r && r !== 'None') || '',
     set: card.set || '', setId: card.setId || '', num: card.num || '', date: card.date || '', lang,
   };
+  if (card.cat) { slot.cat = card.cat; slot.code = card.code || card.setId; slot.total = card.total || 0; } // a Japanese/Korean printing
+  return slot;
 }
 
 export function sameCard(a, b) {
-  return !!(a && b && a.id && b.id && a.id === b.id);
+  return !!(a && b && a.id && b.id && a.id === b.id && (a.cat || '') === (b.cat || ''));
 }
 
 // ---------- Settings (per device, not synced) ----------
