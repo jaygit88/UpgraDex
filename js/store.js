@@ -126,7 +126,7 @@ export function addSwap(dex, card, lang = 'EN', qty = 1, extra = {}) {
     e.swaps = e.swaps || [];
     const i = e.swaps.findIndex((s) => sameCard(s, card) && s.lang === lang);
     if (i >= 0) { e.swaps[i].qty += qty; total = e.swaps[i].qty; }
-    else e.swaps.push({ ...slotFromCard(card, lang, extra), qty, added: Date.now() });
+    else e.swaps.push({ ...slotFromCard(card, lang, extra), ...(card.custom ? { custom: true } : {}), qty, added: Date.now() });
     return e;
   });
   return total;

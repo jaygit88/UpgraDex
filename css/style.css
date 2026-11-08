@@ -481,3 +481,9 @@ label.inline input, label.inline select { width: 80px; margin: 0; }
 .qty-n { font-weight: 800; font-variant-numeric: tabular-nums; }
 .tabs a span { font-size: .68rem; }
 .tabs .icon { width: 24px; height: 24px; }
+
+/* "Keep your old card as a swap?" */
+.old-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; max-height: 50vh; overflow-y: auto; }
+.old-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; cursor: pointer; }
+.old-row .thumb { width: 52px; flex: none; border-radius: 6px; }
+.old-row input[type=checkbox] { width: 22px; height: 22px; flex: none; }

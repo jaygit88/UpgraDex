@@ -61,6 +61,19 @@ let openSheet = () => {};
 let toast = () => {};
 const closeSheet = () => openSheet(null);
 
+// The real card he had before a replacement (null if there wasn't one, or it's the same card).
+function oldCard(before, card) {
+  const o = before?.owned;
+  return o && !o.unknown && o.id && !store.sameCard(o, card) ? o : null;
+}
+
+// After a new card replaces an old one, ask whether the old one becomes a swap.
+// items: [{ dex, old }]. then() runs however the question is closed (e.g. to move on to the next screen).
+function askOldToSwaps(items, then) {
+  if (!items.length) { then?.(); return; }
+  openSheet({ kind: 'oldswap', items, onClosed: then });
+}
+
 function speciesName(dex) {
   return BY_DEX.get(+dex)?.name || `#${dex}`;
 }
@@ -135,6 +148,8 @@ function gotIt(dex, index) {
     return e;
   });
   toast({ msg: `Nice! ${speciesName(dex)} upgraded 🎉`, undo: () => store.setEntry(dex, before) });
+  const old = oldCard(before, up);
+  if (old) askOldToSwaps([{ dex, old }]);
 }
 
 function removeUpgrade(dex, index) {
@@ -826,10 +841,46 @@ function Sheet({ sheet }) {
   if (sheet.kind === 'slot') body = html`<${SlotSheet} ...${sheet} />`;
   if (sheet.kind === 'manual') body = html`<${ManualSheet} ...${sheet} />`;
   if (sheet.kind === 'swap') body = html`<${SwapSheet} ...${sheet} />`;
+  if (sheet.kind === 'oldswap') body = html`<${OldSwapSheet} ...${sheet} />`;
   return html`<div class="sheet-backdrop" onClick=${closeSheet}>
     <div class="sheet" role="dialog" aria-modal="true" onClick=${(e) => e.stopPropagation()}>
       <button class="icon-btn sheet-close" onClick=${closeSheet} aria-label="Close"><${Icon} name="close" /></button>
       ${body}
+    </div>
+  </div>`;
+}
+
+// "Your old card – keep it as a swap?"
+function OldSwapSheet({ items }) {
+  const [picked, setPicked] = useState(() => items.map(() => true));
+  const many = items.length > 1;
+  const chosen = items.filter((_, i) => picked[i]);
+  const yes = () => {
+    const before = new Map(chosen.map((x) => [x.dex, store.getEntry(x.dex)]));
+    for (const { dex, old } of chosen) store.addSwap(dex, old, old.lang || 'EN');
+    const n = chosen.length;
+    if (n) toast({ msg: n === 1 ? `Your old ${speciesName(chosen[0].dex)} is now in your swaps 🔁` : `${n} old cards added to your swaps 🔁`,
+      undo: () => { for (const [dex, e] of before) store.setEntry(dex, e); } });
+    closeSheet();
+  };
+  return html`<div class="sheet-body single old-swap">
+    <h2>${many ? `Keep your ${items.length} old cards as swaps?` : `Keep your old ${speciesName(items[0].dex)} as a swap?`}</h2>
+    <p class="muted small">${many ? 'You swapped these out for new cards. Untick any you no longer have.' : 'You swapped it out for a new card. If you still have the old one, you could trade it.'}</p>
+    <div class="old-list">
+      ${items.map(({ dex, old }, i) => html`<label class="old-row" key=${dex + '-' + i}>
+        ${many && html`<input type="checkbox" checked=${picked[i]} onChange=${() => setPicked(picked.map((v, j) => (j === i ? !v : v)))} />`}
+        <${CardImage} card=${old} className="thumb" />
+        <div class="grow">
+          <div><span class="muted">${pad(dex)}</span> <b>${old.name}</b></div>
+          <div class="muted small">${setLine(old)}</div>
+          <div class="row-wrap"><${RarityChip} rarity=${old.rarity} /><${LangBadge} lang=${old.lang} /></div>
+        </div>
+        ${!old.custom && html`<${PriceTag} id=${priceKey(old)} lang=${old.lang} cat=${old.cat} />`}
+      </label>`)}
+    </div>
+    <div class="row-wrap actions">
+      <button class="btn primary" disabled=${!chosen.length} onClick=${yes}>🔁 ${many ? `Add ${chosen.length} to swaps` : 'Yes, add to swaps'}</button>
+      <button class="btn" onClick=${closeSheet}>${many ? 'No thanks' : "No, I haven't got it"}</button>
     </div>
   </div>`;
 }
@@ -867,8 +918,10 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
     });
     const spot = binderText(dex, settings);
     toast({ msg: `Saved as your ${speciesName(dex)}${spot ? ` – goes in ${spot}` : ''}`, undo: () => store.setEntry(dex, before) });
-    if (purpose === 'owned' && settings.fastSetup) go(`#/p/${nextDex(dex)}/cards/owned`);
-    else go(`#/p/${dex}`);
+    const next = () => (purpose === 'owned' && settings.fastSetup ? go(`#/p/${nextDex(dex)}/cards/owned`) : go(`#/p/${dex}`));
+    const old = oldCard(before, card);
+    if (old) askOldToSwaps([{ dex, old }], next);
+    else next();
   };
 
   const addUp = () => {
@@ -916,7 +969,7 @@ function SlotSheet({ dex, where }) {
       <div class="row-wrap actions">
         ${where === 'owned'
           ? html`<a class="btn" href=${`#/p/${dex}/cards/owned`}>Change card</a>`
-          : html`<button class="btn success" onClick=${() => { gotIt(dex, where); closeSheet(); }}>Got it! 🎉</button>
+          : html`<button class="btn success" onClick=${() => { closeSheet(); gotIt(dex, where); }}>Got it! 🎉</button>
                  <button class="btn" onClick=${() => { removeUpgrade(dex, where); closeSheet(); }}>Remove</button>`}
         <a class="btn" href=${`#/p/${dex}`}>Open ${speciesName(dex)}</a>
       </div>
@@ -937,9 +990,11 @@ function ManualSheet({ dex, purpose }) {
 
   const save = (asOwned) => {
     const slot = { id: 'custom-' + Date.now().toString(36), name: f.name.trim() || speciesName(dex), img: '', rarity: f.rarity, set: f.set.trim(), setId: '', num: f.num.trim(), date: '', lang: f.lang, custom: true };
+    const before = store.getEntry(dex);
     store.updateEntry(dex, (x) => { if (asOwned) x.owned = slot; else x.ups.push(slot); return x; });
-    closeSheet();
-    go(`#/p/${dex}`);
+    const old = asOwned ? oldCard(before, slot) : null;
+    if (old) askOldToSwaps([{ dex, old }], () => go(`#/p/${dex}`));
+    else { closeSheet(); go(`#/p/${dex}`); }
   };
 
   return html`<div class="sheet-body single">
@@ -983,11 +1038,19 @@ function VersionTag() {
   return html`<button class="version-tag" title=${detail} aria-label=${`Version ${BUILD.label}`} onClick=${() => toast({ msg: detail })}>${BUILD.label}</button>`;
 }
 
+let currentSheet = null;
+
 function App() {
   const route = useRoute();
   const [sheet, setSheet] = useState(null);
   const [t, setT] = useState(null);
-  openSheet = setSheet;
+  openSheet = (s) => {
+    // Tell the sheet being closed or replaced, so it can carry on (e.g. move to the next screen).
+    const prev = currentSheet;
+    currentSheet = s;
+    setSheet(s);
+    if (prev && prev !== s) prev.onClosed?.();
+  };
   toast = (x) => setT({ ...x, key: Date.now() });
 
   const tab = ['shop', 'scan', 'budget', 'swaps', 'settings'].includes(route.name) ? route.name : 'dex';
@@ -1066,6 +1129,6 @@ async function main() {
   }
 }
 
-export { openSheet, toast, go, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName };
+export { askOldToSwaps, openSheet, toast, go, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName };
 
 main();

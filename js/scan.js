@@ -10,7 +10,7 @@ import { PriceBlock } from './price.js';
 import * as store from './store.js';
 import { IS_TEST } from './env.js';
 import { SCANNER_SUBDOMAIN } from './config.js';
-import { openSheet, toast, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName } from './app.js';
+import { openSheet, toast, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName, askOldToSwaps } from './app.js';
 import { VerdictBanner } from './verdict.js';
 import { BinderSpot } from './binder.js';
 import { TradeCheck } from './trade.js';
@@ -375,6 +375,12 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
       });
     }
     const n = toSave.length;
+    const olds = [];
+    for (const r of toSave) {
+      const o = before.get(r.m.p.dex)?.owned;
+      if (r.action === 'save' && o && !o.unknown && o.id && !store.sameCard(o, r.chosen) && !olds.some((x) => x.dex === r.m.p.dex)) olds.push({ dex: r.m.p.dex, old: o });
+    }
+    if (olds.length) askOldToSwaps(olds);
     toast({ msg: `Saved ${n} card${n === 1 ? '' : 's'} to your collection 🎉`, undo: () => { for (const [dex, e] of before) store.setEntry(dex, e); setSavedCount((c) => c - n); } });
     setRows((rs) => rs.map((r) => (r.action === 'save' ? { ...r, action: 'have', justSaved: true } : r.action === 'mark' ? { ...r, action: 'marked' } : r)));
     setSavedCount((c) => c + n);
