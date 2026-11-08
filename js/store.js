@@ -39,7 +39,7 @@ function notify() {
   for (const l of listeners) l(version);
 }
 
-export const EMPTY = Object.freeze({ owned: null, ups: [], note: '', u: 0 });
+export const EMPTY = Object.freeze({ owned: null, ups: [], swaps: [], note: '', u: 0 });
 
 export function getEntry(dex) {
   return entries[dex] || EMPTY;
@@ -54,7 +54,8 @@ function clean(e) {
 }
 
 export function setEntry(dex, next, { fromRemote = false } = {}) {
-  const e = clean({ owned: next.owned || null, ups: (next.ups || []).slice(0, MAX_UPS), note: next.note || '', u: fromRemote ? next.u : Date.now() });
+  const swaps = (next.swaps || []).filter((s) => s && s.qty > 0);
+  const e = clean({ owned: next.owned || null, ups: (next.ups || []).slice(0, MAX_UPS), swaps, note: next.note || '', u: fromRemote ? next.u : Date.now() });
   entries = { ...entries, [dex]: e };
   persist();
   notify();
@@ -80,7 +81,7 @@ export function replaceAll(newEntries) {
   const now = Date.now();
   entries = {};
   for (const [dex, e] of Object.entries(newEntries || {})) {
-    entries[dex] = clean({ owned: e.owned || null, ups: e.ups || [], note: e.note || '', u: now });
+    entries[dex] = clean({ owned: e.owned || null, ups: e.ups || [], swaps: (e.swaps || []).filter((s) => s && s.qty > 0), note: e.note || '', u: now });
   }
   persist();
   notify();
@@ -114,6 +115,38 @@ export function slotFromCard(card, lang = 'EN', extra = {}) {
 
 export function sameCard(a, b) {
   return !!(a && b && a.id && b.id && a.id === b.id && (a.cat || '') === (b.cat || ''));
+}
+
+// ---------- Swaps (spare cards to trade) ----------
+// Kept with each Pokémon (entries[dex].swaps = [{ ...slot, qty, added }]), so sync and backups include them.
+
+export function addSwap(dex, card, lang = 'EN', qty = 1, extra = {}) {
+  let total = qty;
+  updateEntry(dex, (e) => {
+    e.swaps = e.swaps || [];
+    const i = e.swaps.findIndex((s) => sameCard(s, card) && s.lang === lang);
+    if (i >= 0) { e.swaps[i].qty += qty; total = e.swaps[i].qty; }
+    else e.swaps.push({ ...slotFromCard(card, lang, extra), qty, added: Date.now() });
+    return e;
+  });
+  return total;
+}
+
+export function changeSwapQty(dex, index, delta) {
+  updateEntry(dex, (e) => {
+    const s = e.swaps && e.swaps[index];
+    if (!s) return e;
+    s.qty += delta;
+    if (s.qty <= 0) e.swaps.splice(index, 1);
+    return e;
+  });
+}
+
+// Every swap as { dex, index, slot }.
+export function allSwaps(all = entries) {
+  const out = [];
+  for (const [dex, e] of Object.entries(all)) (e.swaps || []).forEach((slot, index) => out.push({ dex: +dex, index, slot }));
+  return out;
 }
 
 // ---------- Settings (per device, not synced) ----------

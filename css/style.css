@@ -465,3 +465,19 @@ label.inline input, label.inline select { width: 80px; margin: 0; }
 @media (prefers-color-scheme: dark) { .ok-note { background: #173d29; color: #8ee4b0; } }
 .jp-hint { display: inline-block; margin: 4px 0; font-weight: 600; }
 .cat-switch { margin: 4px 0 8px; }
+
+/* ---------- Swaps ---------- */
+.swap-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+.swap-summary > div { background: var(--surface); border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); }
+.swap-summary b { display: block; font-size: 1.35rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.swap-summary span { color: var(--muted); font-size: .85rem; }
+.add-swap { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.add-swap .finder { width: 100%; }
+.swap-row { display: flex; align-items: center; gap: 6px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding-right: 8px; }
+.swap-main { display: flex; gap: 12px; align-items: center; flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 8px 4px 8px 8px; color: var(--text); cursor: pointer; }
+.swap-main .thumb { width: 56px; flex: none; border-radius: 6px; }
+.swap-price { text-align: right; white-space: nowrap; }
+.qty { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.qty-n { font-weight: 800; font-variant-numeric: tabular-nums; }
+.tabs a span { font-size: .68rem; }
+.tabs .icon { width: 24px; height: 24px; }

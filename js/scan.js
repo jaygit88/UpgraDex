@@ -201,7 +201,7 @@ export function ScanScreen() {
       </section>
       <section class="scan-mode">
         <h2>Catalogue a binder page</h2>
-        <p class="muted small">Photograph a whole binder page (up to ${pocketsLabel} cards) and save them all as your cards. Uses the more careful reader.</p>
+        <p class="muted small">Photograph a whole binder page (up to ${pocketsLabel} cards) and save them all as your cards — or add them to your swaps. Uses the more careful reader.</p>
         <div class="row-wrap">
           <button class="btn primary" disabled=${!ready} onClick=${() => pick('catalog')}><${Icon} name="camera" /> Scan a page</button>
           <button class="btn" disabled=${!ready} onClick=${() => pick('catalog', true)}>Choose photo</button>
@@ -332,12 +332,17 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
     const lang = langOf(m.det);
     let action = m.p ? defaultAction(m.p.dex, m.best, lang) : 'skip';
     if (m.level === 'guess' && action === 'save') action = 'skip'; // only save a guess if he ticks it
-    return { m, chosen: m.best, lang, action, open: false };
+    return { m, chosen: m.best, lang, action, open: false, swap: !!m.best && m.level !== 'guess' };
   }));
   const update = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const toSave = rows.filter((r) => r.m.p && ((r.action === 'save' && r.chosen) || r.action === 'mark'));
   const [savedCount, setSavedCount] = useState(0); // cards saved from this page so far
   const [leaving, setLeaving] = useState(null); // 'done' | 'next' while asking about unsaved cards
+  // Is this page his collection, or a page of spare cards to add to his swaps?
+  const [target, setTarget] = useState('collection');
+  const swapsMode = target === 'swaps';
+  const toSwap = rows.filter((r) => r.m.p && r.chosen && r.swap && !r.swapped);
+  const pending = swapsMode ? toSwap : toSave;
 
   // What's on the page, for the summary line.
   const counts = { save: toSave.length, have: 0, check: 0, replace: 0 };
@@ -350,7 +355,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
 
   // Leaving with unsaved ticked cards? Ask first instead of quietly losing them.
   const leave = (kind) => {
-    if (toSave.length) { setLeaving(kind); return; }
+    if (pending.length) { setLeaving(kind); return; }
     (kind === 'next' ? onAgain : onDone)();
   };
 
@@ -376,23 +381,49 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
     return n;
   };
 
+  const saveSwaps = () => {
+    const before = new Map();
+    for (const r of toSwap) {
+      const dex = r.m.p.dex;
+      if (!before.has(dex)) before.set(dex, store.getEntry(dex));
+      store.addSwap(dex, r.chosen, r.lang, 1);
+    }
+    const n = toSwap.length;
+    toast({ msg: `Added ${n} card${n === 1 ? '' : 's'} to your swaps 🔁`, undo: () => { for (const [dex, e] of before) store.setEntry(dex, e); setSavedCount((c) => c - n); } });
+    setRows((rs) => rs.map((r) => (r.swap && r.chosen && r.m.p && !r.swapped ? { ...r, swapped: true } : r)));
+    setSavedCount((c) => c + n);
+    return n;
+  };
+  const doSave = () => (swapsMode ? saveSwaps() : save());
+
   return html`<div class="scan-result">
     <div class="read-line"><img class="scan-preview" src=${preview} alt="Your photo" /><div>
       <b>Found ${matches.length} card${matches.length === 1 ? '' : 's'}</b>
       <div class="muted small">Check each one, then press <b>Save</b>. Tap a card to pick a different version.</div>
     </div></div>
 
-    ${matches.length > 0 && html`<div class="cat-summary" role="status">
+    ${matches.length > 0 && savedCount === 0 && html`<div class="seg" role="tablist" aria-label="What are these cards?">
+      <button role="tab" aria-selected=${!swapsMode} class=${!swapsMode ? 'on' : ''} onClick=${() => setTarget('collection')}>📒 My collection</button>
+      <button role="tab" aria-selected=${swapsMode} class=${swapsMode ? 'on' : ''} onClick=${() => setTarget('swaps')}>🔁 These are swaps</button>
+    </div>`}
+
+    ${matches.length > 0 && swapsMode && html`<div class="cat-summary" role="status">
+      ${toSwap.length > 0 && html`<span class="sum-chip sum-save">🔁 ${plural(toSwap.length, 'card')} to add to swaps</span>`}
+      ${rows.filter((r) => r.swapped).length > 0 && html`<span class="sum-chip sum-have">${plural(rows.filter((r) => r.swapped).length, 'card')} added</span>`}
+      ${rows.filter((r) => !r.swapped && (!r.chosen || !r.swap)).length > 0 && html`<span class="sum-chip sum-check">${plural(rows.filter((r) => !r.swapped && (!r.chosen || !r.swap)).length, 'card needs', 'cards need')} checking</span>`}
+    </div>`}
+
+    ${matches.length > 0 && !swapsMode && html`<div class="cat-summary" role="status">
       ${counts.save > 0 && html`<span class="sum-chip sum-save">✓ ${plural(counts.save, 'card')} to save</span>`}
       ${counts.have > 0 && html`<span class="sum-chip sum-have">${plural(counts.have, 'card')} already yours</span>`}
       ${counts.replace > 0 && html`<span class="sum-chip sum-replace">${plural(counts.replace, 'card')} you already have a different version of (tick to replace)</span>`}
       ${counts.check > 0 && html`<span class="sum-chip sum-check">${plural(counts.check, 'card needs', 'cards need')} checking</span>`}
     </div>`}
 
-    ${savedCount > 0 && toSave.length === 0 && html`<div class="saved-banner" role="status">
-      <b>✓ ${plural(savedCount, 'card')} saved to your collection</b>
+    ${savedCount > 0 && pending.length === 0 && html`<div class="saved-banner" role="status">
+      <b>✓ ${plural(savedCount, 'card')} ${swapsMode ? 'added to your swaps' : 'saved to your collection'}</b>
       <div class="row-wrap">
-        <a class="btn" href="#/">View in Pokédex</a>
+        <a class="btn" href=${swapsMode ? '#/swaps' : '#/'}>${swapsMode ? 'View swaps' : 'View in Pokédex'}</a>
         <button class="btn primary" onClick=${onAgain}><${Icon} name="camera" /> Scan next page</button>
       </div>
     </div>`}
@@ -404,7 +435,7 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
         const { m } = r;
         const owned = m.p && store.getEntry(m.p.dex).owned;
         const differs = owned && !owned.unknown && r.chosen && !store.sameCard(owned, r.chosen);
-        return html`<div class=${`cat-row ${['save', 'mark'].includes(r.action) ? 'will-save' : ''}`} key=${i}>
+        return html`<div class=${`cat-row ${(swapsMode ? r.swap && r.chosen && !r.swapped : ['save', 'mark'].includes(r.action)) ? 'will-save' : ''}`} key=${i}>
           <div class="cat-main">
             <button class="cat-img" onClick=${() => update(i, { open: !r.open })} aria-label="Choose a different card">
               ${r.chosen ? html`<${CardImage} card=${r.chosen} />` : html`<div class="card-img placeholder"><div>?</div></div>`}
@@ -423,13 +454,19 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
               </div>
               ${m.p && html`<${BinderSpot} dex=${m.p.dex} compact />`}
               <${LangPicker} value=${r.lang} onChange=${(l) => update(i, { lang: l, action: r.action === 'have' ? 'save' : r.action })} />
-              ${m.p && !r.chosen && (r.action === 'marked'
+              ${swapsMode && m.p && r.chosen && (r.swapped
+                ? html`<div class="small ok-text">✓ Added to your swaps</div>`
+                : html`<label class="check small">
+                    <input type="checkbox" checked=${r.swap} onChange=${(e) => update(i, { swap: e.currentTarget.checked })} />
+                    ${m.level === 'guess' && r.chosen === m.best && !r.swap ? 'Best guess — tick if it\'s the right card' : 'Add to my swaps'}
+                  </label>`)}
+              ${!swapsMode && m.p && !r.chosen && (r.action === 'marked'
                 ? html`<div class="small ok-text">✓ Marked as owned – pick the exact card later</div>`
                 : !store.getEntry(m.p.dex).owned && html`<label class="check small">
                     <input type="checkbox" checked=${r.action === 'mark'} onChange=${(e) => update(i, { action: e.currentTarget.checked ? 'mark' : 'skip' })} />
                     I've got a ${m.p.name} now (pick the exact card later)
                   </label>`)}
-              ${m.p && r.chosen && (r.action === 'have'
+              ${!swapsMode && m.p && r.chosen && (r.action === 'have'
                 ? html`<div class="small ok-text">${r.justSaved ? `✓ Saved as your ${m.p.name}` : `✓ Already your ${m.p.name} — nothing to save`}</div>`
                 : html`<label class="check small">
                     <input type="checkbox" checked=${r.action === 'save'} onChange=${(e) => update(i, { action: e.currentTarget.checked ? 'save' : 'skip' })} />
@@ -437,25 +474,25 @@ function CatalogResult({ matches, preview, onAgain, onDone }) {
                   </label>`)}
             </div>
           </div>
-          ${r.open && m.p && html`<${Candidates} m=${m} chosen=${r.chosen} onChoose=${(c) => update(i, { chosen: c, open: false, action: defaultAction(m.p.dex, c, r.lang) === 'have' ? 'have' : 'save' })} />`}
+          ${r.open && m.p && html`<${Candidates} m=${m} chosen=${r.chosen} onChoose=${(c) => update(i, { chosen: c, open: false, swap: true, action: defaultAction(m.p.dex, c, r.lang) === 'have' ? 'have' : 'save' })} />`}
         </div>`;
       })}
     </div>
 
     <div class="sticky-actions">
       ${leaving && html`<div class="leave-warning" role="alertdialog" aria-label="Unsaved cards">
-        <b>Wait — you haven't saved ${plural(toSave.length, 'card')} yet!</b>
+        <b>Wait — you haven't ${swapsMode ? 'added' : 'saved'} ${plural(pending.length, 'card')} yet!</b>
         <div class="row-wrap">
-          <button class="btn primary" onClick=${() => { save(); const kind = leaving; setLeaving(null); (kind === 'next' ? onAgain : onDone)(); }}>
-            Save ${plural(toSave.length, 'card')}${leaving === 'next' ? ' & scan next' : ''}</button>
+          <button class="btn primary" onClick=${() => { doSave(); const kind = leaving; setLeaving(null); (kind === 'next' ? onAgain : onDone)(); }}>
+            ${swapsMode ? 'Add' : 'Save'} ${plural(pending.length, 'card')}${leaving === 'next' ? ' & scan next' : ''}</button>
           <button class="btn" onClick=${() => { const kind = leaving; setLeaving(null); (kind === 'next' ? onAgain : onDone)(); }}>Leave without saving</button>
           <button class="btn small" onClick=${() => setLeaving(null)}>Go back</button>
         </div>
       </div>`}
       ${!leaving && html`<div class="row-wrap">
-        ${toSave.length > 0
-          ? html`<button class="btn primary big-save" onClick=${save}>💾 Save ${plural(toSave.length, 'card')}</button>`
-          : html`<button class="btn primary" disabled>Nothing new to save</button>`}
+        ${pending.length > 0
+          ? html`<button class="btn primary big-save" onClick=${doSave}>${swapsMode ? `🔁 Add ${plural(pending.length, 'card')} to swaps` : `💾 Save ${plural(pending.length, 'card')}`}</button>`
+          : html`<button class="btn primary" disabled>Nothing new to ${swapsMode ? 'add' : 'save'}</button>`}
         <button class="btn" onClick=${() => leave('next')}><${Icon} name="camera" /> Scan next page</button>
         <button class="btn" onClick=${() => leave('done')}>Done</button>
       </div>`}

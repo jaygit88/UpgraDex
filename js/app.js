@@ -12,6 +12,7 @@ import { ScanScreen, ScannerSettings } from './scan.js';
 import { BudgetScreen } from './budget.js';
 import { SummaryScreen } from './summary.js';
 import { BinderSpot, BinderSettings, binderText } from './binder.js';
+import { SwapsScreen, SwapSheet } from './swaps.js';
 
 const { MAX_UPS, LANGS } = store;
 const LANG_NAMES = { EN: 'English', JP: 'Japanese', KR: 'Korean' };
@@ -28,6 +29,7 @@ function parseRoute(hash) {
   if (parts[0] === 'shop') return { name: 'shop' };
   if (parts[0] === 'scan') return { name: 'scan' };
   if (parts[0] === 'budget') return { name: 'budget' };
+  if (parts[0] === 'swaps') return { name: 'swaps' };
   if (parts[0] === 'summary') return { name: 'summary' };
   if (parts[0] === 'settings') return { name: 'settings' };
   return { name: 'dex' };
@@ -114,6 +116,7 @@ function Icon({ name }) {
     plus: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z',
     refresh: 'M17.6 6.4A8 8 0 1019.8 14h-2.1a6 6 0 11-1.4-6.2L13 11h7V4z',
     budget: 'M12 2a10 10 0 100 20 10 10 0 000-20zm1 15v2h-2v-2c-1.7-.3-3-1.4-3-3h2c0 .8.9 1.5 2 1.5s2-.6 2-1.4c0-.9-.8-1.2-2.3-1.6C9.8 12 8 11.4 8 9.4c0-1.5 1.2-2.6 3-3V4.5h2v1.9c1.7.4 2.8 1.6 2.8 3.1h-2c0-.8-.8-1.4-1.8-1.4s-2 .5-2 1.3c0 .7.7 1 2.3 1.5 2.1.6 3.7 1.3 3.7 3.3 0 1.5-1.2 2.6-3 2.8z',
+    swap: 'M7 7h10.2l-2.6-2.6L16 3l5 5-5 5-1.4-1.4L17.2 9H7V7zm10 10H6.8l2.6 2.6L8 21l-5-5 5-5 1.4 1.4L6.8 15H17v2z',
     camera: 'M9 3L7.2 5H4a2 2 0 00-2 2v11a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2h-3.2L15 3H9zm3 5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6z',
   };
   return html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d=${paths[name]} /></svg>`;
@@ -350,6 +353,25 @@ function PokemonScreen({ dex }) {
     </ol>
     ${e.ups.length < MAX_UPS && html`<a class="btn primary block" href=${`#/p/${dex}/cards/up`}><${Icon} name="plus" /> Add an upgrade</a>`}
 
+    <h2>Swaps <span class="muted">(${(e.swaps || []).reduce((n, s) => n + s.qty, 0)})</span></h2>
+    ${(e.swaps || []).length === 0 && html`<p class="muted small">No spare ${p.name} cards to trade.</p>`}
+    <div class="shop-list">
+      ${(e.swaps || []).map((s, i) => html`<div class="swap-row" key=${s.id + i}>
+        <button class="swap-main" onClick=${() => openSheet({ kind: 'swap', dex, index: i })}>
+          <${CardImage} card=${s} className="thumb" />
+          <div class="grow"><div class="small"><b>${s.name}</b></div><div class="muted small">${setLine(s)}</div>
+            <div class="row-wrap"><${RarityChip} rarity=${s.rarity} /><${LangBadge} lang=${s.lang} /></div></div>
+          ${!s.custom && html`<${PriceTag} id=${priceKey(s)} lang=${s.lang} cat=${s.cat} />`}
+        </button>
+        <div class="qty" role="group" aria-label="How many">
+          <button class="icon-btn small" aria-label="One fewer" onClick=${() => store.changeSwapQty(dex, i, -1)}>−</button>
+          <span class="qty-n">×${s.qty}</span>
+          <button class="icon-btn small" aria-label="One more" onClick=${() => store.changeSwapQty(dex, i, 1)}>+</button>
+        </div>
+      </div>`)}
+    </div>
+    <a class="btn block" href=${`#/p/${dex}/cards/swap`}>🔁 Add a ${p.name} swap</a>
+
     <h2>Notes</h2>
     <textarea class="notes" rows="2" placeholder="e.g. Saw this at the card shop for £20" value=${note}
       onInput=${(ev) => setNote(ev.currentTarget.value)} onBlur=${saveNote}></textarea>
@@ -424,7 +446,7 @@ function PickerScreen({ dex, purpose, cat: routeCat }) {
   }, [state.cards, fancy, rarity, text, sort, cat]);
 
   const title = purpose === 'owned' ? `Which ${p.name} do you have?`
-    : purpose === 'up' ? `Pick an upgrade for ${p.name}` : `${p.name} cards`;
+    : purpose === 'up' ? `Pick an upgrade for ${p.name}` : purpose === 'swap' ? `Add a ${p.name} swap` : `${p.name} cards`;
 
   return html`<div class="pad">
     <div class="poke-head">
@@ -803,6 +825,7 @@ function Sheet({ sheet }) {
   if (sheet.kind === 'pick') body = html`<${PickSheet} ...${sheet} />`;
   if (sheet.kind === 'slot') body = html`<${SlotSheet} ...${sheet} />`;
   if (sheet.kind === 'manual') body = html`<${ManualSheet} ...${sheet} />`;
+  if (sheet.kind === 'swap') body = html`<${SwapSheet} ...${sheet} />`;
   return html`<div class="sheet-backdrop" onClick=${closeSheet}>
     <div class="sheet" role="dialog" aria-modal="true" onClick=${(e) => e.stopPropagation()}>
       <button class="icon-btn sheet-close" onClick=${closeSheet} aria-label="Close"><${Icon} name="close" /></button>
@@ -855,16 +878,25 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
   };
 
   const primaryOwned = purpose === 'owned';
+  const primarySwap = purpose === 'swap';
+  const swapCount = (e.swaps || []).filter((s) => store.sameCard(s, card) && s.lang === lang).reduce((n, s) => n + s.qty, 0);
+  const addSwap = () => {
+    const before = store.getEntry(dex);
+    const n = store.addSwap(dex, card, lang, 1, extra());
+    toast({ msg: `Added to your swaps${n > 1 ? ` (you've got ${n} now)` : ''}`, undo: () => store.setEntry(dex, before) });
+    if (primarySwap) go('#/swaps');
+  };
   const ownedBtn = html`<button class=${`btn ${primaryOwned ? 'primary' : ''}`} disabled=${isOwned} onClick=${setOwned}>${isOwned ? 'This is your card' : 'This is my card'}</button>`;
-  const upBtn = html`<button class=${`btn ${!primaryOwned ? 'primary' : ''}`} disabled=${full || upIdx >= 0 || isOwned} onClick=${addUp}>
+  const upBtn = html`<button class=${`btn ${!primaryOwned && !primarySwap ? 'primary' : ''}`} disabled=${full || upIdx >= 0 || isOwned} onClick=${addUp}>
     ${upIdx >= 0 ? `Already upgrade #${upIdx + 1}` : full ? `Upgrade list full (${MAX_UPS})` : `Add as upgrade #${e.ups.length + 1}`}</button>`;
+  const swapBtn = html`<button class=${`btn ${primarySwap ? 'primary' : ''}`} onClick=${addSwap}>🔁 Add to swaps${swapCount ? ` (have ${swapCount})` : ''}</button>`;
 
   return html`<div class="sheet-body">
     <div class="sheet-img"><${CardImage} card=${card} q="high" /></div>
     <div class="sheet-info">
       <${CardDetails} card=${card} />
       ${fixedLang ? '' : html`<div class="field"><span class="small muted">Language of the card</span><${LangPicker} value=${lang} onChange=${setLang} /></div>`}
-      <div class="row-wrap actions">${primaryOwned ? [ownedBtn, upBtn] : [upBtn, ownedBtn]}</div>
+      <div class="row-wrap actions">${primarySwap ? [swapBtn, ownedBtn, upBtn] : primaryOwned ? [ownedBtn, upBtn, swapBtn] : [upBtn, ownedBtn, swapBtn]}</div>
       <${PriceBlock} id=${priceKey(card)} cat=${card.cat} lang=${lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />
     </div>
   </div>`;
@@ -958,7 +990,7 @@ function App() {
   openSheet = setSheet;
   toast = (x) => setT({ ...x, key: Date.now() });
 
-  const tab = ['shop', 'scan', 'budget', 'settings'].includes(route.name) ? route.name : 'dex';
+  const tab = ['shop', 'scan', 'budget', 'swaps', 'settings'].includes(route.name) ? route.name : 'dex';
   return html`<div class="app">
     <header class="top">
       <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar-art.png" alt="" width="40" height="41" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
@@ -974,6 +1006,7 @@ function App() {
       ${route.name === 'shop' && html`<${Screen} active><${ShopScreen} /></${Screen}>`}
       ${route.name === 'scan' && html`<${Screen} active><${ScanScreen} /></${Screen}>`}
       ${route.name === 'budget' && html`<${Screen} active><${BudgetScreen} /></${Screen}>`}
+      ${route.name === 'swaps' && html`<${Screen} active><${SwapsScreen} /></${Screen}>`}
       ${route.name === 'summary' && html`<${Screen} active><${SummaryScreen} /></${Screen}>`}
       ${route.name === 'settings' && html`<${Screen} active><${SettingsScreen} /></${Screen}>`}
     </div>
@@ -982,6 +1015,7 @@ function App() {
       <a class=${tab === 'scan' ? 'on' : ''} href="#/scan"><${Icon} name="camera" /><span>Scan</span></a>
       <a class=${tab === 'budget' ? 'on' : ''} href="#/budget"><${Icon} name="budget" /><span>Budget</span></a>
       <a class=${tab === 'shop' ? 'on' : ''} href="#/shop"><${Icon} name="shop" /><span>Shop list</span></a>
+      <a class=${tab === 'swaps' ? 'on' : ''} href="#/swaps"><${Icon} name="swap" /><span>Swaps</span></a>
       <a class=${tab === 'settings' ? 'on' : ''} href="#/settings"><${Icon} name="settings" /><span>Settings</span></a>
     </nav>
     ${sheet && html`<${Sheet} sheet=${sheet} />`}

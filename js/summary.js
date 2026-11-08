@@ -32,7 +32,10 @@ export function SummaryScreen() {
   const picked = owned.filter((x) => !x.e.owned.unknown);
   const priceable = picked.filter((x) => x.e.owned.id && !x.e.owned.custom);
   const topPicks = useMemo(() => POKEDEX.map((p) => entries[p.dex]?.ups?.[0]).filter((u) => u && !u.custom), [entries]);
-  const priceState = usePriceMap([...priceable.map((x) => priceKey(x.e.owned)), ...topPicks.map((u) => priceKey(u))]);
+  const swaps = useMemo(() => store.allSwaps(entries), [entries]);
+  const priceState = usePriceMap([...priceable.map((x) => priceKey(x.e.owned)), ...topPicks.map((u) => priceKey(u)), ...swaps.map((s) => priceKey(s.slot))]);
+  const swapCount = swaps.reduce((n, s) => n + s.slot.qty, 0);
+  const swapValue = swaps.reduce((n, s) => n + (valueOf(priceState.prices.get(priceKey(s.slot)), settings, rates) || 0) * s.slot.qty, 0);
 
   const valued = priceable.map((x) => ({ ...x, value: valueOf(priceState.prices.get(priceKey(x.e.owned)), settings, rates) })).filter((x) => x.value != null);
   const total = valued.reduce((s, x) => s + x.value, 0);
@@ -79,6 +82,8 @@ export function SummaryScreen() {
       <div><b>${fancy}</b><span>Illustration Rare or better</span></div>
       <div><b>${priceState.loading ? '…' : money(wishCost, cur)}</b><span>to buy every top pick</span></div>
     </div>
+
+    ${swaps.length > 0 && html`<a class="summary-link" href="#/swaps">🔁 Swaps: ${swapCount} card${swapCount === 1 ? '' : 's'} worth about ${priceState.loading ? '…' : money(swapValue, cur)} ›</a>`}
 
     <h2>Most valuable cards</h2>
     ${top5.length === 0 && html`<p class="muted small">${priceState.loading ? 'Working it out…' : 'Pick your exact cards on each Pokémon’s page to see what they’re worth.'}</p>`}
