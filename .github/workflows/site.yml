@@ -1,8 +1,9 @@
-name: Deploy to GitHub Pages
+name: Deploy site (Cloudflare)
 
-# Publishes the real app (main branch) under /app/ and the test copy (test branch) under /test/.
-# They sit side by side (neither inside the other) so phones never mix the two installed apps up.
-# The site root just forwards to /app/.
+# Publishes UpgraDex to https://upgradex.jay-tuck1988.workers.dev as one Cloudflare Worker:
+# the real app (main branch) under /app/, the test copy (test branch) under /test/, and a site root
+# that forwards to /app/. They sit side by side so phones never mix the two installed apps up.
+# Needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (the same ones the scanner uses).
 on:
   push:
     branches: [main]
@@ -13,21 +14,16 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Updates to main and test can land close together; queue them instead of colliding.
 # (Every run rebuilds both copies, so the last one always publishes the latest of each.)
 concurrency:
-  group: pages
+  group: site
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,34 +56,30 @@ jobs:
             date=$(git -C "$2" log -1 --format=%cI)
             printf "export const BUILD = { label: 'v%s', sha: '%s', date: '%s' };\n" "$n" "$sha" "$date" > "$1/js/version.js"
           }
-          mkdir -p site/app
+          copy_app() {
+            mkdir -p "$1"
+            cp -r "$2"/. "$1"/
+            rm -rf "$1"/.git "$1"/.github "$1"/scanner "$1"/site-root "$1"/scripts
+          }
+          mkdir -p site
           cp -r main-src/site-root/. site/
-          touch site/.nojekyll
-          cp -r main-src/. site/app/
-          rm -rf site/app/.git site/app/.github site/app/scanner site/app/site-root
+          copy_app site/app main-src
           write_version site/app main-src
           if [ -d test-src ]; then
-            mkdir -p site/test
-            cp -r test-src/. site/test/
-            rm -rf site/test/.git site/test/.github site/test/scanner site/test/site-root
+            copy_app site/test test-src
             node main-src/scripts/make-test-site.mjs site/test
             write_version site/test test-src
           fi
+          python3 main-src/scripts/pack-site.py site worker
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/setup-node@v4
         with:
-          path: site
-      # GitHub can still be finishing the previous publish (e.g. a test-branch update a minute earlier),
-      # which makes this step fail with "in progress deployment". Wait and try again rather than fail.
-      - id: first
-        uses: actions/deploy-pages@v4
-        continue-on-error: true
-      - name: Wait for the previous publish to finish
-        if: steps.first.outcome == 'failure'
-        run: sleep 90
-      - id: second
-        if: steps.first.outcome == 'failure'
-        uses: actions/deploy-pages@v4
-      - id: deployment
-        run: echo "page_url=${{ steps.second.outputs.page_url || steps.first.outputs.page_url }}" >> "$GITHUB_OUTPUT"
+          node-version: 22
+
+      - name: Deploy
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+        run: npx --yes wrangler@4 deploy

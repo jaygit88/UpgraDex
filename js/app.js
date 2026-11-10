@@ -1,8 +1,8 @@
 import { html, render, useState, useEffect, useMemo, useRef, useLayoutEffect } from '../vendor/preact-htm.js';
 import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardPicture, GENS, CATALOGUES, LANG_FOR_CAT, intlCardsFor, intlCount } from './data.js';
-import { getCardsFor, priceKey, peekPrices } from './api.js';
+import { getCardsFor, priceKey, peekPrices, getPrices, getRates } from './api.js';
 import { idbClear } from './idb.js';
-import { PriceTag, PriceBlock, usePrices } from './price.js';
+import { PriceTag, PriceBlock, usePrices, valueOf, sumCurrency } from './price.js';
 import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from './rarity.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -11,7 +11,10 @@ import { BUILD } from './version.js';
 import { ScanScreen, ScannerSettings } from './scan.js';
 import { BudgetScreen } from './budget.js';
 import { SummaryScreen } from './summary.js';
-import { BinderSpot, BinderSettings, binderText } from './binder.js';
+import * as priceHistory from './history.js';
+import { ChangesScreen } from './changes.js';
+import { ShareSwapsSheet } from './share.js';
+import { BinderSpot, BinderSettings, BinderScreen, binderText } from './binder.js';
 import { SwapsScreen, SwapSheet } from './swaps.js';
 
 const { MAX_UPS, LANGS } = store;
@@ -31,6 +34,8 @@ function parseRoute(hash) {
   if (parts[0] === 'budget') return { name: 'budget' };
   if (parts[0] === 'swaps') return { name: 'swaps' };
   if (parts[0] === 'summary') return { name: 'summary' };
+  if (parts[0] === 'changes') return { name: 'changes' };
+  if (parts[0] === 'binder') return { name: 'binder', binder: +parts[1] || 0, page: +parts[2] || 0, dex: +parts[3] || 0 };
   if (parts[0] === 'settings') return { name: 'settings' };
   return { name: 'dex' };
 }
@@ -253,7 +258,10 @@ function DexScreen() {
       <div><b>${stats.ups}</b><span>upgrades planned</span></div>
     </div>
     <div class="progress"><div style=${`width:${(stats.owned / POKEDEX.length) * 100}%`}></div></div>
-    <a class="summary-link" href="#/summary">📊 Collection summary & value ›</a>
+    <div class="summary-links">
+      <a class="summary-link" href="#/summary">📊 Collection summary & value ›</a>
+      <a class="summary-link" href="#/binder">📒 Binder view ›</a>
+    </div>
     <div class="toolbar sticky">
       <input type="search" placeholder="Search name or number…" value=${q} onInput=${(e) => setQ(e.currentTarget.value)} />
       <select value=${gen} onChange=${(e) => setGen(+e.currentTarget.value)} aria-label="Generation">
@@ -841,6 +849,7 @@ function Sheet({ sheet }) {
   if (sheet.kind === 'slot') body = html`<${SlotSheet} ...${sheet} />`;
   if (sheet.kind === 'manual') body = html`<${ManualSheet} ...${sheet} />`;
   if (sheet.kind === 'swap') body = html`<${SwapSheet} ...${sheet} />`;
+  if (sheet.kind === 'shareswaps') body = html`<${ShareSwapsSheet} />`;
   if (sheet.kind === 'oldswap') body = html`<${OldSwapSheet} ...${sheet} />`;
   return html`<div class="sheet-backdrop" onClick=${closeSheet}>
     <div class="sheet" role="dialog" aria-modal="true" onClick=${(e) => e.stopPropagation()}>
@@ -1071,6 +1080,8 @@ function App() {
       ${route.name === 'budget' && html`<${Screen} active><${BudgetScreen} /></${Screen}>`}
       ${route.name === 'swaps' && html`<${Screen} active><${SwapsScreen} /></${Screen}>`}
       ${route.name === 'summary' && html`<${Screen} active><${SummaryScreen} /></${Screen}>`}
+      ${route.name === 'changes' && html`<${Screen} active><${ChangesScreen} /></${Screen}>`}
+      ${route.name === 'binder' && html`<${Screen} active><${BinderScreen} ...${route} /></${Screen}>`}
       ${route.name === 'settings' && html`<${Screen} active><${SettingsScreen} /></${Screen}>`}
     </div>
     <nav class="tabs">
@@ -1122,6 +1133,7 @@ async function main() {
   render(html`<${App} />`, document.getElementById('app'));
   setTimeout(hideSplash, Math.max(0, SPLASH_MIN_MS - (performance.now() - started)));
   sync.startSync();
+  priceHistory.startDailyRefresh({ store, api: { priceKey, getPrices, getRates }, valueOf, sumCurrency });
 
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator && window.isSecureContext) {

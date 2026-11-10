@@ -83,6 +83,7 @@ export function SummaryScreen() {
       <div><b>${priceState.loading ? '…' : money(wishCost, cur)}</b><span>to buy every top pick</span></div>
     </div>
 
+    <a class="summary-link" href="#/changes">📈 Price changes – what's gone up and down ›</a>
     ${swaps.length > 0 && html`<a class="summary-link" href="#/swaps">🔁 Swaps: ${swapCount} card${swapCount === 1 ? '' : 's'} worth about ${priceState.loading ? '…' : money(swapValue, cur)} ›</a>`}
 
     <h2>Most valuable cards</h2>
@@ -117,6 +118,6 @@ export function SummaryScreen() {
         <li>Oldest card: <b>${oldest.e.owned.name}</b> from ${oldest.e.owned.set} (${oldest.e.owned.date.slice(0, 4)}).</li>
         ${bySet.size > 0 && html`<li>Your cards come from <b>${bySet.size}</b> different sets.</li>`}
       </ul>`}
-    <p class="muted small">Values are typical recent sale prices for English cards in good condition (${settings.priceSource === 'tcgplayer' ? 'TCGplayer' : 'Cardmarket'}). Japanese and Korean cards are valued as their English version.</p>
+    <p class="muted small">Values are typical recent sale prices for English cards in good condition (${settings.priceSource === 'tcgplayer' ? 'TCGplayer' : 'Cardmarket'}). Japanese cards use Japanese prices where they're known.</p>
   </div>`;
 }

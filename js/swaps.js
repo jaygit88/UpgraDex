@@ -4,7 +4,7 @@
 import { html, useState, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, BY_DEX, pad, spriteUrl } from './data.js';
 import { priceKey } from './api.js';
-import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote, PriceBlock } from './price.js';
+import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote, PriceBlock, ChangeBadge } from './price.js';
 import * as store from './store.js';
 import { openSheet, toast, CardImage, RarityChip, LangBadge, setLine, Icon, speciesName } from './app.js';
 
@@ -68,7 +68,8 @@ export function SwapsScreen() {
     <div class="add-swap">
       ${adding === ''
         ? html`<button class="btn primary" onClick=${() => setAdding(' ')}><${Icon} name="plus" /> Add a swap</button>
-               <a class="btn" href="#/scan">📷 Scan swaps</a>`
+               <a class="btn" href="#/scan">📷 Scan swaps</a>
+               ${swaps.length > 0 && html`<button class="btn" onClick=${() => openSheet({ kind: 'shareswaps' })}>📤 Share my swaps</button>`}`
         : html`<div class="finder">
             <input type="search" autoFocus placeholder="Which Pokémon? e.g. Pikachu" value=${adding.trim()} onInput=${(e) => setAdding(e.currentTarget.value || ' ')} />
             <div class="suggest">${searchPokemon(adding).map((p) => html`<a href=${`#/p/${p.dex}/cards/swap`}>
@@ -100,7 +101,7 @@ export function SwapsScreen() {
           </div>
           <div class="swap-price">
             ${r.each == null ? html`<span class="muted small">${priceState.loading ? '…' : 'no price'}</span>`
-              : html`<b>${money(r.total, cur)}</b>${r.slot.qty > 1 ? html`<div class="muted small">${money(r.each, cur)} each</div>` : ''}`}
+              : html`<b>${money(r.total, cur)}</b><div><${ChangeBadge} id=${priceKey(r.slot)} p=${priceState.prices.get(priceKey(r.slot))} /></div>${r.slot.qty > 1 ? html`<div class="muted small">${money(r.each, cur)} each</div>` : ''}`}
           </div>
         </button>
         <div class="qty" role="group" aria-label="How many">

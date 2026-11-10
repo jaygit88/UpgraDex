@@ -2,6 +2,7 @@
 
 import { SETS } from './data.js';
 import { idbGet, idbSet } from './idb.js';
+import { recordPrice } from './history.js';
 
 const BASE = 'https://api.tcgdex.net/v2';
 const CARDS_TTL = 3 * 24 * 3600e3; // card lists: refresh every 3 days
@@ -203,6 +204,7 @@ export async function getPrices(id, { maxAge = PRICE_TTL } = {}) {
     });
     priceMemory.set(id, value);
     idbSet(key, value);
+    recordPrice(id, value);
     return value;
   } catch (e) {
     if (cached) { const v = { ...cached, stale: true }; priceMemory.set(id, v); return v; }
