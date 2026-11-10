@@ -7,6 +7,15 @@ import * as store from './store.js';
 import { CardImage, Icon, go, toast } from './app.js';
 
 const POCKET_LAYOUTS = { 4: [2, 2], 9: [3, 3], 12: [3, 4], 16: [4, 4], 18: [3, 3] }; // [columns, rows] per page side
+// Page layouts to choose from in Settings: [across, down].
+export const LAYOUT_CHOICES = [[2, 2], [3, 3], [4, 3], [3, 4], [4, 4]];
+
+// [across, down] for a binder: what was chosen, or the usual layout for its number of pockets.
+export function layoutOf(b) {
+  if (b && b.cols > 0 && b.rows > 0) return [b.cols, b.rows];
+  const n = b?.pockets || 9;
+  return POCKET_LAYOUTS[n] || [Math.ceil(Math.sqrt(n)), Math.ceil(n / Math.ceil(Math.sqrt(n)))];
+}
 
 export function binderSettings(settings) {
   return {
@@ -35,10 +44,10 @@ export function binderSpot(dex, settings, entries = store.allEntries()) {
     if (index < capacity) {
       const page = Math.floor(index / pockets) + 1;
       const pocket = (index % pockets) + 1;
-      const [cols] = POCKET_LAYOUTS[pockets] || [Math.ceil(Math.sqrt(pockets))];
+      const [cols, rows] = layoutOf(binders[b]);
       const row = Math.floor((pocket - 1) / cols) + 1;
       const col = ((pocket - 1) % cols) + 1;
-      return { binder: b + 1, name: name || `Binder ${b + 1}`, page, pocket, row, col, cols, rows: Math.ceil(pockets / cols) };
+      return { binder: b + 1, name: name || `Binder ${b + 1}`, page, pocket, row, col, cols, rows };
     }
     index -= capacity;
   }
@@ -47,7 +56,8 @@ export function binderSpot(dex, settings, entries = store.allEntries()) {
 
 function where(s) {
   const rowWord = s.row === 1 ? 'top row' : s.row === s.rows ? 'bottom row' : s.rows === 3 ? 'middle row' : `row ${s.row}`;
-  const colWord = s.cols === 3 ? ['left', 'middle', 'right'][s.col - 1] : s.cols === 2 ? ['left', 'right'][s.col - 1] : `${s.col}${['st', 'nd', 'rd'][s.col - 1] || 'th'} from left`;
+  const colWord = s.cols === 3 ? ['left', 'middle', 'right'][s.col - 1] : s.cols === 2 ? ['left', 'right'][s.col - 1]
+    : s.col === 1 ? 'far left' : s.col === s.cols ? 'far right' : `${s.col}${['st', 'nd', 'rd'][s.col - 1] || 'th'} from left`;
   return rowWord === 'middle row' && colWord === 'middle' ? 'right in the middle' : `${rowWord}, ${colWord}`;
 }
 
@@ -92,13 +102,16 @@ export function BinderSettings() {
       <label class="inline">Pages <input type="number" min="1" inputmode="numeric" value=${b.pages}
         onChange=${(e) => save(list.map((x, j) => (j === i ? { ...x, pages: Math.max(1, +e.currentTarget.value || 1) } : x)))} /></label>
       <label class="inline">Cards per page
-        <select value=${b.pockets} onChange=${(e) => save(list.map((x, j) => (j === i ? { ...x, pockets: +e.currentTarget.value } : x)))}>
-          ${[4, 9, 12, 16].map((n) => html`<option value=${n}>${n}</option>`)}
+        <select value=${layoutOf(b).join('x')} onChange=${(e) => {
+          const [cols, rows] = e.currentTarget.value.split('x').map(Number);
+          save(list.map((x, j) => (j === i ? { ...x, cols, rows, pockets: cols * rows } : x)));
+        }}>
+          ${LAYOUT_CHOICES.map(([c, r]) => html`<option value=${`${c}x${r}`}>${c * r} – ${c} across, ${r} down</option>`)}
         </select></label>
       <button class="icon-btn small" aria-label="Remove binder" onClick=${() => save(list.filter((_, j) => j !== i))}>✕</button>
     </div>`)}
     <div class="row-wrap">
-      <button class="btn" onClick=${() => save([...list, { name: '', pages: 40, pockets: 9 }])}>+ Add a binder</button>
+      <button class="btn" onClick=${() => save([...list, { name: '', pages: 40, pockets: 9, cols: 3, rows: 3 }])}>+ Add a binder</button>
     </div>
     <label class="check"><input type="checkbox" checked=${gaps} onChange=${(e) => save(list, e.currentTarget.checked)} />
       Leave an empty pocket for each missing Pokémon</label>
@@ -122,7 +135,7 @@ export function binderLayout(settings, entries = store.allEntries()) {
       for (let k = 0; k < b.pockets; k++) pockets.push(i < order.length ? order[i++] : null);
       pages.push(pockets);
     }
-    const [cols] = POCKET_LAYOUTS[b.pockets] || [Math.ceil(Math.sqrt(b.pockets))];
+    const [cols] = layoutOf(b);
     return { name: b.name || `Binder ${n + 1}`, pages, cols };
   });
 }
@@ -166,11 +179,15 @@ export function BinderScreen({ binder: bParam = 0, page: pParam = 0, dex: hlDex 
   const [q, setQ] = useState('');
 
   if (!layout.length) {
-    const quick = () => store.updateSettings({ binders: [{ name: 'My binder', pages: Math.ceil(POKEDEX.length / 12), pockets: 12 }], binderGaps: true });
+    const quick = (cols, rows) => store.updateSettings({ binders: [{ name: 'My binder', pages: Math.ceil(POKEDEX.length / (cols * rows)), pockets: cols * rows, cols, rows }], binderGaps: true });
     return html`<div class="pad narrow">
       <div class="row-wrap"><a class="icon-btn" href="#/" aria-label="Back"><${Icon} name="back" /></a><h1 class="grow">Binder view</h1></div>
       <p>Tell the app how you keep your cards and it'll show your binder pages, with the gaps to fill.</p>
-      <div class="row-wrap"><button class="btn primary" onClick=${quick}>Use one binder, 12 cards a page</button><a class="btn" href="#/settings">Set up binders in Settings</a></div>
+      <p class="small">How are the cards laid out on one page?</p>
+      <div class="row-wrap">
+        ${[[3, 3], [4, 3], [3, 4], [4, 4]].map(([c, r]) => html`<button class="btn" onClick=${() => quick(c, r)}>${c * r} cards: ${c} across, ${r} down</button>`)}
+        <a class="btn" href="#/settings">More choices in Settings</a>
+      </div>
     </div>`;
   }
 
