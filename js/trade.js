@@ -3,7 +3,7 @@
 
 import { html, useState, useRef, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, pad, spriteUrl } from './data.js';
-import { getCardsFor } from './api.js';
+import { getCardsFor, priceKey } from './api.js';
 import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote } from './price.js';
 import * as store from './store.js';
 import { CardImage, LangPicker, setLine, Icon } from './app.js';
@@ -51,7 +51,7 @@ function CardFinder({ side, onPick, onCancel }) {
   </div>`;
 }
 
-function Side({ side, title, items, total, cur, adding, ready, onScan, onFind, onRemove, onLang, prices, settings, rates, children }) {
+function Side({ side, title, items, total, cur, adding, ready, onScan, onFind, onSwaps, onRemove, onLang, prices, settings, rates, children }) {
   return html`<section class=${`trade-side side-${side}`}>
     <div class="trade-head">
       <h2>${title}</h2>
@@ -60,7 +60,7 @@ function Side({ side, title, items, total, cur, adding, ready, onScan, onFind, o
     ${items.length === 0 && !adding && html`<p class="muted small">No cards added yet.</p>`}
     <div class="trade-items">
       ${items.map((it) => {
-        const v = valueOf(prices.get(it.card.id), settings, rates);
+        const v = valueOf(prices.get(priceKey(it.card)), settings, rates);
         return html`<div class="trade-item" key=${it.key}>
           <${CardImage} card=${it.card} className="thumb" />
           <div class="grow">
@@ -78,6 +78,7 @@ function Side({ side, title, items, total, cur, adding, ready, onScan, onFind, o
     ${!adding && html`<div class="row-wrap">
       <button class="btn" disabled=${!ready} onClick=${() => onScan(false)} title=${ready ? '' : 'Set up the scanner in Settings first'}><${Icon} name="camera" /> Scan a card</button>
       <button class="btn" onClick=${onFind}>Find by name</button>
+      ${onSwaps && html`<button class="btn" onClick=${onSwaps}>🔁 From your swaps</button>`}
     </div>`}
   </section>`;
 }
@@ -91,10 +92,10 @@ export function TradeCheck({ ready, onDone }) {
   const fileRef = useRef(null);
   const scanSide = useRef(null); // which side the photo being taken is for
 
-  const ids = useMemo(() => [...items.his, ...items.theirs].map((x) => x.card.id), [items]);
+  const ids = useMemo(() => [...items.his, ...items.theirs].map((x) => priceKey(x.card)), [items]);
   const priceState = usePriceMap(ids);
-  const totalOf = (side) => items[side].reduce((s, x) => s + (valueOf(priceState.prices.get(x.card.id), settings, rates) ?? 0), 0);
-  const unpriced = [...items.his, ...items.theirs].filter((x) => !priceState.loading && valueOf(priceState.prices.get(x.card.id), settings, rates) == null).length;
+  const totalOf = (side) => items[side].reduce((s, x) => s + (valueOf(priceState.prices.get(priceKey(x.card)), settings, rates) ?? 0), 0);
+  const unpriced = [...items.his, ...items.theirs].filter((x) => !priceState.loading && valueOf(priceState.prices.get(priceKey(x.card)), settings, rates) == null).length;
 
   const add = (side, it) => {
     setItems((s) => ({ ...s, [side]: [...s[side], { ...it, key: nextKey++ }] }));
@@ -117,7 +118,7 @@ export function TradeCheck({ ready, onDone }) {
       const det = (res.cards || [])[0];
       if (!det) throw new Error('No card found in that photo.');
       const m = await matchDetection(det);
-      if (m.best && m.sure) add(side, { dex: m.p.dex, card: m.best, lang: langOf(det) });
+      if (m.best && m.level !== 'guess') add(side, { dex: m.p.dex, card: m.best, lang: langOf(det) });
       else if (m.p && m.candidates.length) setAdding({ side, phase: 'choose', m });
       else throw new Error(m.loadError || "Couldn't tell which card that is. Try again, or use Find by name.");
     } catch (e) {
@@ -143,6 +144,16 @@ export function TradeCheck({ ready, onDone }) {
     if (!adding || adding.side !== side) return null;
     if (adding.phase === 'scanning') return html`<div class="scan-working small-working"><img class="scan-gif" src="icons/loading-charmander.gif" alt="" width="348" height="231" /><p>Reading the card…</p></div>`;
     if (adding.phase === 'find') return html`<${CardFinder} side=${side} onPick=${(it) => add(side, it)} onCancel=${() => setAdding(null)} />`;
+    if (adding.phase === 'swaps') {
+      const list = store.allSwaps().filter((s) => !items[side].some((x) => store.sameCard(x.card, s.slot) && x.lang === s.slot.lang));
+      return html`<div class="finder">
+        ${list.length === 0 ? html`<p class="small muted">No swaps to add — add spare cards on the Swaps tab first.</p>`
+          : html`<p class="small muted">Tap a swap you'd trade:</p>
+            <div class="cand-strip">${list.map((s) => html`<button class="cand" onClick=${() => add(side, { dex: s.dex, card: s.slot, lang: s.slot.lang })}>
+              <${CardImage} card=${s.slot} /><span class="small">${s.slot.name}<br />${s.slot.set}${s.slot.qty > 1 ? ` ×${s.slot.qty}` : ''}</span></button>`)}</div>`}
+        <button class="btn small" onClick=${() => setAdding(null)}>Cancel</button>
+      </div>`;
+    }
     if (adding.phase === 'choose') return html`<div class="finder">
       <p class="small">Which ${adding.m.p.name} card is it?</p>
       <${Candidates} m=${adding.m} chosen=${adding.m.best} onChoose=${(c) => add(side, { dex: adding.m.p.dex, card: c, lang: langOf(adding.m.det) })} />
@@ -161,7 +172,7 @@ export function TradeCheck({ ready, onDone }) {
 
     <div class="trade-grid">
       <${Side} side="his" title="You give" items=${items.his} total=${his} adding=${adding?.side === 'his'}
-        onScan=${() => startScan('his')} onFind=${() => setAdding({ side: 'his', phase: 'find' })} onRemove=${remove('his')} onLang=${setLangFor('his')} ...${sideProps}>
+        onScan=${() => startScan('his')} onFind=${() => setAdding({ side: 'his', phase: 'find' })} onSwaps=${() => setAdding({ side: 'his', phase: 'swaps' })} onRemove=${remove('his')} onLang=${setLangFor('his')} ...${sideProps}>
         ${addingPanel('his')}
       </${Side}>
       <${Side} side="theirs" title="You get" items=${items.theirs} total=${theirs} adding=${adding?.side === 'theirs'}

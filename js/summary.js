@@ -2,6 +2,7 @@
 
 import { html, useMemo } from '../vendor/preact-htm.js';
 import { POKEDEX, GENS, pad } from './data.js';
+import { priceKey } from './api.js';
 import { usePriceMap, valueOf, useRates, money, sumCurrency, ProgressNote } from './price.js';
 import { rarityLabel, rarityRank } from './rarity.js';
 import * as store from './store.js';
@@ -31,12 +32,15 @@ export function SummaryScreen() {
   const picked = owned.filter((x) => !x.e.owned.unknown);
   const priceable = picked.filter((x) => x.e.owned.id && !x.e.owned.custom);
   const topPicks = useMemo(() => POKEDEX.map((p) => entries[p.dex]?.ups?.[0]).filter((u) => u && !u.custom), [entries]);
-  const priceState = usePriceMap([...priceable.map((x) => x.e.owned.id), ...topPicks.map((u) => u.id)]);
+  const swaps = useMemo(() => store.allSwaps(entries), [entries]);
+  const priceState = usePriceMap([...priceable.map((x) => priceKey(x.e.owned)), ...topPicks.map((u) => priceKey(u)), ...swaps.map((s) => priceKey(s.slot))]);
+  const swapCount = swaps.reduce((n, s) => n + s.slot.qty, 0);
+  const swapValue = swaps.reduce((n, s) => n + (valueOf(priceState.prices.get(priceKey(s.slot)), settings, rates) || 0) * s.slot.qty, 0);
 
-  const valued = priceable.map((x) => ({ ...x, value: valueOf(priceState.prices.get(x.e.owned.id), settings, rates) })).filter((x) => x.value != null);
+  const valued = priceable.map((x) => ({ ...x, value: valueOf(priceState.prices.get(priceKey(x.e.owned)), settings, rates) })).filter((x) => x.value != null);
   const total = valued.reduce((s, x) => s + x.value, 0);
   const top5 = [...valued].sort((a, b) => b.value - a.value).slice(0, 5);
-  const wishCost = topPicks.reduce((s, u) => s + (valueOf(priceState.prices.get(u.id), settings, rates) ?? 0), 0);
+  const wishCost = topPicks.reduce((s, u) => s + (valueOf(priceState.prices.get(priceKey(u)), settings, rates) ?? 0), 0);
 
   // Breakdowns
   const byRarity = new Map();
@@ -79,6 +83,9 @@ export function SummaryScreen() {
       <div><b>${priceState.loading ? '…' : money(wishCost, cur)}</b><span>to buy every top pick</span></div>
     </div>
 
+    <a class="summary-link" href="#/changes">📈 Price changes – what's gone up and down ›</a>
+    ${swaps.length > 0 && html`<a class="summary-link" href="#/swaps">🔁 Swaps: ${swapCount} card${swapCount === 1 ? '' : 's'} worth about ${priceState.loading ? '…' : money(swapValue, cur)} ›</a>`}
+
     <h2>Most valuable cards</h2>
     ${top5.length === 0 && html`<p class="muted small">${priceState.loading ? 'Working it out…' : 'Pick your exact cards on each Pokémon’s page to see what they’re worth.'}</p>`}
     <ol class="top-list">
@@ -111,6 +118,6 @@ export function SummaryScreen() {
         <li>Oldest card: <b>${oldest.e.owned.name}</b> from ${oldest.e.owned.set} (${oldest.e.owned.date.slice(0, 4)}).</li>
         ${bySet.size > 0 && html`<li>Your cards come from <b>${bySet.size}</b> different sets.</li>`}
       </ul>`}
-    <p class="muted small">Values are typical recent sale prices for English cards in good condition (${settings.priceSource === 'tcgplayer' ? 'TCGplayer' : 'Cardmarket'}). Japanese and Korean cards are valued as their English version.</p>
+    <p class="muted small">Values are typical recent sale prices for English cards in good condition (${settings.priceSource === 'tcgplayer' ? 'TCGplayer' : 'Cardmarket'}). Japanese cards use Japanese prices where they're known.</p>
   </div>`;
 }

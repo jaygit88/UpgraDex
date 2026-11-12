@@ -45,7 +45,7 @@ async function buildSets() {
   const list = await getJSON('https://api.tcgdex.net/v2/en/sets');
   const sets = await pool(list, 8, async (s) => {
     const d = await getJSON(`https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(s.id)}`);
-    return [d.id, { n: d.name, d: d.releaseDate || '', s: d.serie?.id || '', sn: d.serie?.name || '', a: d.abbreviation?.official || '' }];
+    return [d.id, { n: d.name, d: d.releaseDate || '', s: d.serie?.id || '', sn: d.serie?.name || '', a: d.abbreviation?.official || '', o: d.cardCount?.official || 0 }];
   });
   await writeFile('data/sets.json', JSON.stringify(Object.fromEntries(sets)));
   console.log('sets', sets.length);

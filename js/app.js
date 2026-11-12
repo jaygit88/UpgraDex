@@ -1,8 +1,8 @@
 import { html, render, useState, useEffect, useMemo, useRef, useLayoutEffect } from '../vendor/preact-htm.js';
-import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardPicture, GENS } from './data.js';
-import { getCardsFor } from './api.js';
+import { loadStaticData, POKEDEX, BY_DEX, SETS, pad, spriteUrl, cardPicture, GENS, CATALOGUES, LANG_FOR_CAT, intlCardsFor, intlCount } from './data.js';
+import { getCardsFor, priceKey, peekPrices, getPrices, getRates } from './api.js';
 import { idbClear } from './idb.js';
-import { PriceTag, PriceBlock } from './price.js';
+import { PriceTag, PriceBlock, usePrices, valueOf, sumCurrency } from './price.js';
 import { rarityLabel, rarityRank, rarityShort, rarityTier, FANCY_MIN_RANK } from './rarity.js';
 import * as store from './store.js';
 import * as sync from './sync.js';
@@ -11,7 +11,11 @@ import { BUILD } from './version.js';
 import { ScanScreen, ScannerSettings } from './scan.js';
 import { BudgetScreen } from './budget.js';
 import { SummaryScreen } from './summary.js';
-import { BinderSpot, BinderSettings, binderText } from './binder.js';
+import * as priceHistory from './history.js';
+import { ChangesScreen } from './changes.js';
+import { ShareSwapsSheet } from './share.js';
+import { BinderSpot, BinderSettings, BinderScreen, binderText } from './binder.js';
+import { SwapsScreen, SwapSheet } from './swaps.js';
 
 const { MAX_UPS, LANGS } = store;
 const LANG_NAMES = { EN: 'English', JP: 'Japanese', KR: 'Korean' };
@@ -22,13 +26,16 @@ function parseRoute(hash) {
   const parts = hash.replace(/^#\/?/, '').split('/');
   if (parts[0] === 'p' && BY_DEX.has(+parts[1])) {
     const dex = +parts[1];
-    if (parts[2] === 'cards') return { name: 'picker', dex, purpose: parts[3] || 'browse' };
+    if (parts[2] === 'cards') return { name: 'picker', dex, purpose: parts[3] || 'browse', cat: ['ja', 'ko'].includes(parts[4]) ? parts[4] : '' };
     return { name: 'pokemon', dex };
   }
   if (parts[0] === 'shop') return { name: 'shop' };
   if (parts[0] === 'scan') return { name: 'scan' };
   if (parts[0] === 'budget') return { name: 'budget' };
+  if (parts[0] === 'swaps') return { name: 'swaps' };
   if (parts[0] === 'summary') return { name: 'summary' };
+  if (parts[0] === 'changes') return { name: 'changes' };
+  if (parts[0] === 'binder') return { name: 'binder', binder: +parts[1] || 0, page: +parts[2] || 0, dex: +parts[3] || 0 };
   if (parts[0] === 'settings') return { name: 'settings' };
   return { name: 'dex' };
 }
@@ -58,6 +65,19 @@ function useSessionState(key, initial) {
 let openSheet = () => {};
 let toast = () => {};
 const closeSheet = () => openSheet(null);
+
+// The real card he had before a replacement (null if there wasn't one, or it's the same card).
+function oldCard(before, card) {
+  const o = before?.owned;
+  return o && !o.unknown && o.id && !store.sameCard(o, card) ? o : null;
+}
+
+// After a new card replaces an old one, ask whether the old one becomes a swap.
+// items: [{ dex, old }]. then() runs however the question is closed (e.g. to move on to the next screen).
+function askOldToSwaps(items, then) {
+  if (!items.length) { then?.(); return; }
+  openSheet({ kind: 'oldswap', items, onClosed: then });
+}
 
 function speciesName(dex) {
   return BY_DEX.get(+dex)?.name || `#${dex}`;
@@ -114,6 +134,7 @@ function Icon({ name }) {
     plus: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z',
     refresh: 'M17.6 6.4A8 8 0 1019.8 14h-2.1a6 6 0 11-1.4-6.2L13 11h7V4z',
     budget: 'M12 2a10 10 0 100 20 10 10 0 000-20zm1 15v2h-2v-2c-1.7-.3-3-1.4-3-3h2c0 .8.9 1.5 2 1.5s2-.6 2-1.4c0-.9-.8-1.2-2.3-1.6C9.8 12 8 11.4 8 9.4c0-1.5 1.2-2.6 3-3V4.5h2v1.9c1.7.4 2.8 1.6 2.8 3.1h-2c0-.8-.8-1.4-1.8-1.4s-2 .5-2 1.3c0 .7.7 1 2.3 1.5 2.1.6 3.7 1.3 3.7 3.3 0 1.5-1.2 2.6-3 2.8z',
+    swap: 'M7 7h10.2l-2.6-2.6L16 3l5 5-5 5-1.4-1.4L17.2 9H7V7zm10 10H6.8l2.6 2.6L8 21l-5-5 5-5 1.4 1.4L6.8 15H17v2z',
     camera: 'M9 3L7.2 5H4a2 2 0 00-2 2v11a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2h-3.2L15 3H9zm3 5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6z',
   };
   return html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d=${paths[name]} /></svg>`;
@@ -132,6 +153,8 @@ function gotIt(dex, index) {
     return e;
   });
   toast({ msg: `Nice! ${speciesName(dex)} upgraded 🎉`, undo: () => store.setEntry(dex, before) });
+  const old = oldCard(before, up);
+  if (old) askOldToSwaps([{ dex, old }]);
 }
 
 function removeUpgrade(dex, index) {
@@ -235,7 +258,10 @@ function DexScreen() {
       <div><b>${stats.ups}</b><span>upgrades planned</span></div>
     </div>
     <div class="progress"><div style=${`width:${(stats.owned / POKEDEX.length) * 100}%`}></div></div>
-    <a class="summary-link" href="#/summary">📊 Collection summary & value ›</a>
+    <div class="summary-links">
+      <a class="summary-link" href="#/summary">📊 Collection summary & value ›</a>
+      <a class="summary-link" href="#/binder">📒 Binder view ›</a>
+    </div>
     <div class="toolbar sticky">
       <input type="search" placeholder="Search name or number…" value=${q} onInput=${(e) => setQ(e.currentTarget.value)} />
       <select value=${gen} onChange=${(e) => setGen(+e.currentTarget.value)} aria-label="Generation">
@@ -304,9 +330,12 @@ function PokemonScreen({ dex }) {
           <div class="slot-name">${e.owned.name}</div>
           <div class="muted small">${setLine(e.owned)}</div>
           <div class="row-wrap"><${RarityChip} rarity=${e.owned.rarity} /></div>
-          <${LangPicker} value=${e.owned.lang} onChange=${(l) => setLang(dex, 'owned', l)} />
+          ${e.owned.cat
+            ? html`<div class="row-wrap"><${LangBadge} lang=${e.owned.lang} /> <span class="small muted">${e.owned.cat === 'ja' ? 'Japanese' : 'Korean'} card</span></div>`
+            : html`<${LangPicker} value=${e.owned.lang} onChange=${(l) => setLang(dex, 'owned', l)} />`}
+          ${e.owned.lang === 'JP' && !e.owned.cat && html`<a class="jp-hint small" href=${`#/p/${dex}/cards/owned/ja`}>Pick the actual Japanese card to see its real price ›</a>`}
           <div class="row-wrap">
-            <a class="btn small" href=${`#/p/${dex}/cards/owned`}>Change</a>
+            <a class="btn small" href=${`#/p/${dex}/cards/owned${e.owned.cat ? '/' + e.owned.cat : ''}`}>Change</a>
           </div>
         </div>
       </div>`
@@ -334,8 +363,8 @@ function PokemonScreen({ dex }) {
         <div class="slot-info">
           <div class="slot-name">${u.name}</div>
           <div class="muted small">${setLine(u)}</div>
-          <div class="row-wrap"><${RarityChip} rarity=${u.rarity} /> ${!u.custom && html`<${PriceTag} id=${u.id} lang=${u.lang} />`}</div>
-          <${LangPicker} value=${u.lang} onChange=${(l) => setLang(dex, i, l)} />
+          <div class="row-wrap"><${RarityChip} rarity=${u.rarity} /> ${!u.custom && html`<${PriceTag} id=${priceKey(u)} lang=${u.lang} cat=${u.cat} />`}</div>
+          ${u.cat ? html`<div class="row-wrap"><${LangBadge} lang=${u.lang} /></div>` : html`<${LangPicker} value=${u.lang} onChange=${(l) => setLang(dex, i, l)} />`}
           <div class="row-wrap">
             <button class="btn small success" onClick=${() => gotIt(dex, i)}>Got it! 🎉</button>
             <button class="icon-btn small" disabled=${i === 0} onClick=${() => moveUpgrade(dex, i, -1)} aria-label="Move up"><${Icon} name="up" /></button>
@@ -346,6 +375,25 @@ function PokemonScreen({ dex }) {
       </li>`)}
     </ol>
     ${e.ups.length < MAX_UPS && html`<a class="btn primary block" href=${`#/p/${dex}/cards/up`}><${Icon} name="plus" /> Add an upgrade</a>`}
+
+    <h2>Swaps <span class="muted">(${(e.swaps || []).reduce((n, s) => n + s.qty, 0)})</span></h2>
+    ${(e.swaps || []).length === 0 && html`<p class="muted small">No spare ${p.name} cards to trade.</p>`}
+    <div class="shop-list">
+      ${(e.swaps || []).map((s, i) => html`<div class="swap-row" key=${s.id + i}>
+        <button class="swap-main" onClick=${() => openSheet({ kind: 'swap', dex, index: i })}>
+          <${CardImage} card=${s} className="thumb" />
+          <div class="grow"><div class="small"><b>${s.name}</b></div><div class="muted small">${setLine(s)}</div>
+            <div class="row-wrap"><${RarityChip} rarity=${s.rarity} /><${LangBadge} lang=${s.lang} /></div></div>
+          ${!s.custom && html`<${PriceTag} id=${priceKey(s)} lang=${s.lang} cat=${s.cat} />`}
+        </button>
+        <div class="qty" role="group" aria-label="How many">
+          <button class="icon-btn small" aria-label="One fewer" onClick=${() => store.changeSwapQty(dex, i, -1)}>−</button>
+          <span class="qty-n">×${s.qty}</span>
+          <button class="icon-btn small" aria-label="One more" onClick=${() => store.changeSwapQty(dex, i, 1)}>+</button>
+        </div>
+      </div>`)}
+    </div>
+    <a class="btn block" href=${`#/p/${dex}/cards/swap`}>🔁 Add a ${p.name} swap</a>
 
     <h2>Notes</h2>
     <textarea class="notes" rows="2" placeholder="e.g. Saw this at the card shop for £20" value=${note}
@@ -369,7 +417,7 @@ function searchWords(text) {
 function cardMatches(c, words) {
   if (!words.length) return true;
   const year = c.date && !c.date.startsWith('9999') ? c.date.slice(0, 4) : '';
-  const hay = fold([c.name, c.set, SETS[c.setId]?.a, SETS[c.setId]?.sn, rarityLabel(c.rarity), year].join(' '));
+  const hay = fold([c.name, c.set, c.code || SETS[c.setId]?.a, c.cat ? '' : SETS[c.setId]?.sn, c.rarity ? rarityLabel(c.rarity) : '', year].join(' '));
   const num = fold(c.num).replace(/^([a-z]*)0+(\d)/, '$1$2');
   return words.every((w) => {
     if (/^\d+(\/\d+)?$/.test(w)) {
@@ -380,22 +428,30 @@ function cardMatches(c, words) {
   });
 }
 
-function PickerScreen({ dex, purpose }) {
+function PickerScreen({ dex, purpose, cat: routeCat }) {
   const entries = store.useCollection();
   const settings = store.useSettings();
   const p = BY_DEX.get(dex);
   const e = entries[dex] || store.EMPTY;
   const [state, setState] = useState({ loading: true, cards: [] });
+  // Which cards to list: English (''), Japanese ('ja') or Korean ('ko').
+  // Picking his own card for a Pokémon he's tagged Japanese starts on the Japanese cards.
+  const [cat, setCat] = useState(routeCat || (purpose === 'owned' && e.owned?.lang === 'JP' && !e.owned?.cat ? 'ja' : e.owned?.cat && purpose === 'owned' ? e.owned.cat : ''));
+  const [koCount, setKoCount] = useState(0);
+  useEffect(() => { intlCount('ko', dex).then(setKoCount); }, [dex]);
   const [fancy, setFancy] = useSessionState('pick.fancy', false);
   const [rarity, setRarity] = useState('');
   const [text, setText] = useState('');
   const [sort, setSort] = useSessionState('pick.sort', 'new');
 
   const load = (force) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    getCardsFor(dex, p.name, { force }).then((r) => setState({ loading: false, ...r }));
+    setState((s) => ({ ...s, loading: true, error: null, cards: s.cat === cat ? s.cards : [] }));
+    const job = cat
+      ? intlCardsFor(cat, dex).then((cards) => ({ cards }), () => ({ cards: [], error: `Couldn't load the ${CATALOGUES[cat]} cards – check your connection.` }))
+      : getCardsFor(dex, p.name, { force });
+    job.then((r) => setState({ loading: false, cat, ...r }));
   };
-  useEffect(() => { setRarity(''); setText(''); load(false); }, [dex]);
+  useEffect(() => { setRarity(''); setText(''); load(false); }, [dex, cat]);
 
   const rarities = useMemo(() => {
     const m = new Map();
@@ -406,14 +462,14 @@ function PickerScreen({ dex, purpose }) {
   const shown = useMemo(() => {
     const words = searchWords(text);
     let list = state.cards.filter((c) =>
-      (!fancy || rarityRank(c.rarity) >= FANCY_MIN_RANK) && (!rarity || c.rarity === rarity) && cardMatches(c, words));
+      (cat || ((!fancy || rarityRank(c.rarity) >= FANCY_MIN_RANK) && (!rarity || c.rarity === rarity))) && cardMatches(c, words));
     if (sort === 'old') list = [...list].reverse();
     if (sort === 'rarity') list = [...list].sort((a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || b.date.localeCompare(a.date));
     return list;
-  }, [state.cards, fancy, rarity, text, sort]);
+  }, [state.cards, fancy, rarity, text, sort, cat]);
 
   const title = purpose === 'owned' ? `Which ${p.name} do you have?`
-    : purpose === 'up' ? `Pick an upgrade for ${p.name}` : `${p.name} cards`;
+    : purpose === 'up' ? `Pick an upgrade for ${p.name}` : purpose === 'swap' ? `Add a ${p.name} swap` : `${p.name} cards`;
 
   return html`<div class="pad">
     <div class="poke-head">
@@ -425,6 +481,13 @@ function PickerScreen({ dex, purpose }) {
       </div>
       <button class="icon-btn" onClick=${() => load(true)} aria-label="Refresh card list"><${Icon} name="refresh" /></button>
     </div>
+    <div class="seg cat-switch" role="tablist" aria-label="Card language">
+      <button role="tab" aria-selected=${cat === ''} class=${cat === '' ? 'on' : ''} onClick=${() => setCat('')}>English cards</button>
+      <button role="tab" aria-selected=${cat === 'ja'} class=${cat === 'ja' ? 'on' : ''} onClick=${() => setCat('ja')}>Japanese cards</button>
+      ${koCount > 0 && html`<button role="tab" aria-selected=${cat === 'ko'} class=${cat === 'ko' ? 'on' : ''} onClick=${() => setCat('ko')}>Korean cards</button>`}
+    </div>
+    ${cat && !state.loading && html`<p class="muted small">${state.cards.length} ${CATALOGUES[cat]} ${p.name} cards, ${state.cards.filter((c) => c.img).length} with pictures. Tap one to see its ${CATALOGUES[cat]} price.
+      ${cat === 'ja' ? ' Japanese sets are numbered differently from English ones — match the set code and number in the bottom corner (e.g. SV8a 217/187).' : ''}</p>`}
     ${purpose === 'owned' && html`<label class="check">
       <input type="checkbox" checked=${settings.fastSetup} onChange=${(ev) => store.updateSettings({ fastSetup: ev.currentTarget.checked })} />
       Fast setup: after picking, jump straight to the next Pokémon
@@ -436,10 +499,10 @@ function PickerScreen({ dex, purpose }) {
       </select>
     </div>
     <div class="chips">
-      <button class=${`chip ${fancy ? 'on' : ''}`} onClick=${() => setFancy(!fancy)}>✨ Special only</button>
+${!cat && html`<button class=${`chip ${fancy ? 'on' : ''}`} onClick=${() => setFancy(!fancy)}>✨ Special only</button>
       <button class=${`chip ${!rarity ? 'on' : ''}`} onClick=${() => setRarity('')}>All rarities</button>
       ${rarities.map(([r, n]) => html`<button class=${`chip ${rarity === r ? 'on' : ''}`} onClick=${() => setRarity(rarity === r ? '' : r)}>
-        ${rarityLabel(r)} <span class="muted">${n}</span></button>`)}
+        ${rarityLabel(r)} <span class="muted">${n}</span></button>`)}`}
     </div>
     ${state.loading && state.cards.length === 0 && html`<div class="loading-cards">
       <div class="gastly-box"><img src="icons/loading-gastly.gif" alt="" width="500" height="500" /></div>
@@ -547,7 +610,7 @@ function ShopScreen() {
             <div class="muted small">${setLine(u)}</div>
             <div class="row-wrap"><${RarityChip} rarity=${u.rarity} /><${LangBadge} lang=${u.lang} /></div>
           </div>
-          ${!u.custom && html`<${PriceTag} id=${u.id} lang=${u.lang} />`}
+          ${!u.custom && html`<${PriceTag} id=${priceKey(u)} lang=${u.lang} cat=${u.cat} />`}
         </button>`;
       })}
     </div>
@@ -785,6 +848,9 @@ function Sheet({ sheet }) {
   if (sheet.kind === 'pick') body = html`<${PickSheet} ...${sheet} />`;
   if (sheet.kind === 'slot') body = html`<${SlotSheet} ...${sheet} />`;
   if (sheet.kind === 'manual') body = html`<${ManualSheet} ...${sheet} />`;
+  if (sheet.kind === 'swap') body = html`<${SwapSheet} ...${sheet} />`;
+  if (sheet.kind === 'shareswaps') body = html`<${ShareSwapsSheet} />`;
+  if (sheet.kind === 'oldswap') body = html`<${OldSwapSheet} ...${sheet} />`;
   return html`<div class="sheet-backdrop" onClick=${closeSheet}>
     <div class="sheet" role="dialog" aria-modal="true" onClick=${(e) => e.stopPropagation()}>
       <button class="icon-btn sheet-close" onClick=${closeSheet} aria-label="Close"><${Icon} name="close" /></button>
@@ -793,13 +859,51 @@ function Sheet({ sheet }) {
   </div>`;
 }
 
+// "Your old card – keep it as a swap?"
+function OldSwapSheet({ items }) {
+  const [picked, setPicked] = useState(() => items.map(() => true));
+  const many = items.length > 1;
+  const chosen = items.filter((_, i) => picked[i]);
+  const yes = () => {
+    const before = new Map(chosen.map((x) => [x.dex, store.getEntry(x.dex)]));
+    for (const { dex, old } of chosen) store.addSwap(dex, old, old.lang || 'EN');
+    const n = chosen.length;
+    if (n) toast({ msg: n === 1 ? `Your old ${speciesName(chosen[0].dex)} is now in your swaps 🔁` : `${n} old cards added to your swaps 🔁`,
+      undo: () => { for (const [dex, e] of before) store.setEntry(dex, e); } });
+    closeSheet();
+  };
+  return html`<div class="sheet-body single old-swap">
+    <h2>${many ? `Keep your ${items.length} old cards as swaps?` : `Keep your old ${speciesName(items[0].dex)} as a swap?`}</h2>
+    <p class="muted small">${many ? 'You swapped these out for new cards. Untick any you no longer have.' : 'You swapped it out for a new card. If you still have the old one, you could trade it.'}</p>
+    <div class="old-list">
+      ${items.map(({ dex, old }, i) => html`<label class="old-row" key=${dex + '-' + i}>
+        ${many && html`<input type="checkbox" checked=${picked[i]} onChange=${() => setPicked(picked.map((v, j) => (j === i ? !v : v)))} />`}
+        <${CardImage} card=${old} className="thumb" />
+        <div class="grow">
+          <div><span class="muted">${pad(dex)}</span> <b>${old.name}</b></div>
+          <div class="muted small">${setLine(old)}</div>
+          <div class="row-wrap"><${RarityChip} rarity=${old.rarity} /><${LangBadge} lang=${old.lang} /></div>
+        </div>
+        ${!old.custom && html`<${PriceTag} id=${priceKey(old)} lang=${old.lang} cat=${old.cat} />`}
+      </label>`)}
+    </div>
+    <div class="row-wrap actions">
+      <button class="btn primary" disabled=${!chosen.length} onClick=${yes}>🔁 ${many ? `Add ${chosen.length} to swaps` : 'Yes, add to swaps'}</button>
+      <button class="btn" onClick=${closeSheet}>${many ? 'No thanks' : "No, I haven't got it"}</button>
+    </div>
+  </div>`;
+}
+
 function CardDetails({ card }) {
-  const s = SETS[card.setId];
+  const s = card.cat ? null : SETS[card.setId];
+  const code = card.cat ? card.code || card.setId : s?.a;
+  const looked = usePrices(card.cat && !card.rarity ? priceKey(card) : null);
+  const rarity = card.rarity || looked?.rarity || '';
   return html`<div class="card-details">
     <h2>${card.name}</h2>
-    <div>${card.set}${s?.a ? ` (${s.a})` : ''}</div>
-    <div class="muted small">${[card.num ? `Card #${card.num}` : '', card.date && !card.date.startsWith('9999') ? `Released ${card.date}` : '', s?.sn].filter(Boolean).join(' · ')}</div>
-    <div class="row-wrap"><${RarityChip} rarity=${card.rarity} /></div>
+    <div>${card.set}${code ? ` (${code})` : ''}${card.cat ? html` <${LangBadge} lang=${LANG_FOR_CAT[card.cat]} />` : ''}</div>
+    <div class="muted small">${[card.num ? `Card #${card.num}${card.total ? '/' + card.total : ''}` : '', card.date && !card.date.startsWith('9999') ? `Released ${card.date}` : '', s?.sn].filter(Boolean).join(' · ')}</div>
+    <div class="row-wrap"><${RarityChip} rarity=${rarity} /></div>
   </div>`;
 }
 
@@ -807,7 +911,9 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
   store.useCollection();
   const settings = store.useSettings();
   const e = store.getEntry(dex);
-  const [lang, setLang] = useState(initialLang || settings.defaultLang || 'EN');
+  const fixedLang = card.cat ? LANG_FOR_CAT[card.cat] : null; // a Japanese card is Japanese
+  const [lang, setLang] = useState(fixedLang || initialLang || settings.defaultLang || 'EN');
+  const extra = () => ({ rarity: peekPrices(priceKey(card))?.rarity || '' });
   const isOwned = store.sameCard(e.owned, card);
   const upIdx = e.ups.findIndex((u) => store.sameCard(u, card));
   const full = e.ups.length >= MAX_UPS;
@@ -815,34 +921,45 @@ function PickSheet({ dex, card, purpose, lang: initialLang }) {
   const setOwned = () => {
     const before = store.getEntry(dex);
     store.updateEntry(dex, (x) => {
-      x.owned = store.slotFromCard(card, lang);
+      x.owned = store.slotFromCard(card, lang, extra());
       x.ups = x.ups.filter((u) => !store.sameCard(u, card));
       return x;
     });
     const spot = binderText(dex, settings);
     toast({ msg: `Saved as your ${speciesName(dex)}${spot ? ` – goes in ${spot}` : ''}`, undo: () => store.setEntry(dex, before) });
-    if (purpose === 'owned' && settings.fastSetup) go(`#/p/${nextDex(dex)}/cards/owned`);
-    else go(`#/p/${dex}`);
+    const next = () => (purpose === 'owned' && settings.fastSetup ? go(`#/p/${nextDex(dex)}/cards/owned`) : go(`#/p/${dex}`));
+    const old = oldCard(before, card);
+    if (old) askOldToSwaps([{ dex, old }], next);
+    else next();
   };
 
   const addUp = () => {
-    store.updateEntry(dex, (x) => { x.ups.push(store.slotFromCard(card, lang)); return x; });
+    store.updateEntry(dex, (x) => { x.ups.push(store.slotFromCard(card, lang, extra())); return x; });
     toast({ msg: `Added as upgrade #${e.ups.length + 1}` });
     go(`#/p/${dex}`);
   };
 
   const primaryOwned = purpose === 'owned';
+  const primarySwap = purpose === 'swap';
+  const swapCount = (e.swaps || []).filter((s) => store.sameCard(s, card) && s.lang === lang).reduce((n, s) => n + s.qty, 0);
+  const addSwap = () => {
+    const before = store.getEntry(dex);
+    const n = store.addSwap(dex, card, lang, 1, extra());
+    toast({ msg: `Added to your swaps${n > 1 ? ` (you've got ${n} now)` : ''}`, undo: () => store.setEntry(dex, before) });
+    if (primarySwap) go('#/swaps');
+  };
   const ownedBtn = html`<button class=${`btn ${primaryOwned ? 'primary' : ''}`} disabled=${isOwned} onClick=${setOwned}>${isOwned ? 'This is your card' : 'This is my card'}</button>`;
-  const upBtn = html`<button class=${`btn ${!primaryOwned ? 'primary' : ''}`} disabled=${full || upIdx >= 0 || isOwned} onClick=${addUp}>
+  const upBtn = html`<button class=${`btn ${!primaryOwned && !primarySwap ? 'primary' : ''}`} disabled=${full || upIdx >= 0 || isOwned} onClick=${addUp}>
     ${upIdx >= 0 ? `Already upgrade #${upIdx + 1}` : full ? `Upgrade list full (${MAX_UPS})` : `Add as upgrade #${e.ups.length + 1}`}</button>`;
+  const swapBtn = html`<button class=${`btn ${primarySwap ? 'primary' : ''}`} onClick=${addSwap}>🔁 Add to swaps${swapCount ? ` (have ${swapCount})` : ''}</button>`;
 
   return html`<div class="sheet-body">
     <div class="sheet-img"><${CardImage} card=${card} q="high" /></div>
     <div class="sheet-info">
       <${CardDetails} card=${card} />
-      <div class="field"><span class="small muted">Language of the card</span><${LangPicker} value=${lang} onChange=${setLang} /></div>
-      <div class="row-wrap actions">${primaryOwned ? [ownedBtn, upBtn] : [upBtn, ownedBtn]}</div>
-      <${PriceBlock} id=${card.id} lang=${lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />
+      ${fixedLang ? '' : html`<div class="field"><span class="small muted">Language of the card</span><${LangPicker} value=${lang} onChange=${setLang} /></div>`}
+      <div class="row-wrap actions">${primarySwap ? [swapBtn, ownedBtn, upBtn] : primaryOwned ? [ownedBtn, upBtn, swapBtn] : [upBtn, ownedBtn, swapBtn]}</div>
+      <${PriceBlock} id=${priceKey(card)} cat=${card.cat} lang=${lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />
     </div>
   </div>`;
 }
@@ -857,15 +974,15 @@ function SlotSheet({ dex, where }) {
     <div class="sheet-info">
       <div class="muted">${pad(dex)} ${speciesName(dex)} · ${where === 'owned' ? 'My card' : `Upgrade #${where + 1}`}</div>
       <${CardDetails} card=${card} />
-      <div class="field"><span class="small muted">Language</span><${LangPicker} value=${card.lang} onChange=${(l) => setLang(dex, where, l)} /></div>
+      ${card.cat ? '' : html`<div class="field"><span class="small muted">Language</span><${LangPicker} value=${card.lang} onChange=${(l) => setLang(dex, where, l)} /></div>`}
       <div class="row-wrap actions">
         ${where === 'owned'
           ? html`<a class="btn" href=${`#/p/${dex}/cards/owned`}>Change card</a>`
-          : html`<button class="btn success" onClick=${() => { gotIt(dex, where); closeSheet(); }}>Got it! 🎉</button>
+          : html`<button class="btn success" onClick=${() => { closeSheet(); gotIt(dex, where); }}>Got it! 🎉</button>
                  <button class="btn" onClick=${() => { removeUpgrade(dex, where); closeSheet(); }}>Remove</button>`}
         <a class="btn" href=${`#/p/${dex}`}>Open ${speciesName(dex)}</a>
       </div>
-      ${!card.custom && html`<${PriceBlock} id=${card.id} lang=${card.lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />`}
+      ${!card.custom && html`<${PriceBlock} id=${priceKey(card)} cat=${card.cat} lang=${card.lang} name=${card.name} query=${`${card.name} ${card.num} ${card.set}`} />`}
     </div>
   </div>`;
 }
@@ -882,9 +999,11 @@ function ManualSheet({ dex, purpose }) {
 
   const save = (asOwned) => {
     const slot = { id: 'custom-' + Date.now().toString(36), name: f.name.trim() || speciesName(dex), img: '', rarity: f.rarity, set: f.set.trim(), setId: '', num: f.num.trim(), date: '', lang: f.lang, custom: true };
+    const before = store.getEntry(dex);
     store.updateEntry(dex, (x) => { if (asOwned) x.owned = slot; else x.ups.push(slot); return x; });
-    closeSheet();
-    go(`#/p/${dex}`);
+    const old = asOwned ? oldCard(before, slot) : null;
+    if (old) askOldToSwaps([{ dex, old }], () => go(`#/p/${dex}`));
+    else { closeSheet(); go(`#/p/${dex}`); }
   };
 
   return html`<div class="sheet-body single">
@@ -928,14 +1047,22 @@ function VersionTag() {
   return html`<button class="version-tag" title=${detail} aria-label=${`Version ${BUILD.label}`} onClick=${() => toast({ msg: detail })}>${BUILD.label}</button>`;
 }
 
+let currentSheet = null;
+
 function App() {
   const route = useRoute();
   const [sheet, setSheet] = useState(null);
   const [t, setT] = useState(null);
-  openSheet = setSheet;
+  openSheet = (s) => {
+    // Tell the sheet being closed or replaced, so it can carry on (e.g. move to the next screen).
+    const prev = currentSheet;
+    currentSheet = s;
+    setSheet(s);
+    if (prev && prev !== s) prev.onClosed?.();
+  };
   toast = (x) => setT({ ...x, key: Date.now() });
 
-  const tab = ['shop', 'scan', 'budget', 'settings'].includes(route.name) ? route.name : 'dex';
+  const tab = ['shop', 'scan', 'budget', 'swaps', 'settings'].includes(route.name) ? route.name : 'dex';
   return html`<div class="app">
     <header class="top">
       <a class="brand" href="#/"><img class="brand-icon" src="icons/header-gengar-art.png" alt="" width="40" height="41" />UpgraDex${IS_TEST && html` <span class="test-badge">TEST</span>`}</a>
@@ -947,11 +1074,14 @@ function App() {
     <div class="screens">
       <${Screen} active=${route.name === 'dex'}><${DexScreen} /></${Screen}>
       ${route.name === 'pokemon' && html`<${Screen} active key=${'p' + route.dex}><${PokemonScreen} dex=${route.dex} /></${Screen}>`}
-      ${route.name === 'picker' && html`<${Screen} active key=${'c' + route.dex + route.purpose}><${PickerScreen} dex=${route.dex} purpose=${route.purpose} /></${Screen}>`}
+      ${route.name === 'picker' && html`<${Screen} active key=${'c' + route.dex + route.purpose + route.cat}><${PickerScreen} dex=${route.dex} purpose=${route.purpose} cat=${route.cat} /></${Screen}>`}
       ${route.name === 'shop' && html`<${Screen} active><${ShopScreen} /></${Screen}>`}
       ${route.name === 'scan' && html`<${Screen} active><${ScanScreen} /></${Screen}>`}
       ${route.name === 'budget' && html`<${Screen} active><${BudgetScreen} /></${Screen}>`}
+      ${route.name === 'swaps' && html`<${Screen} active><${SwapsScreen} /></${Screen}>`}
       ${route.name === 'summary' && html`<${Screen} active><${SummaryScreen} /></${Screen}>`}
+      ${route.name === 'changes' && html`<${Screen} active><${ChangesScreen} /></${Screen}>`}
+      ${route.name === 'binder' && html`<${Screen} active><${BinderScreen} ...${route} /></${Screen}>`}
       ${route.name === 'settings' && html`<${Screen} active><${SettingsScreen} /></${Screen}>`}
     </div>
     <nav class="tabs">
@@ -959,6 +1089,7 @@ function App() {
       <a class=${tab === 'scan' ? 'on' : ''} href="#/scan"><${Icon} name="camera" /><span>Scan</span></a>
       <a class=${tab === 'budget' ? 'on' : ''} href="#/budget"><${Icon} name="budget" /><span>Budget</span></a>
       <a class=${tab === 'shop' ? 'on' : ''} href="#/shop"><${Icon} name="shop" /><span>Shop list</span></a>
+      <a class=${tab === 'swaps' ? 'on' : ''} href="#/swaps"><${Icon} name="swap" /><span>Swaps</span></a>
       <a class=${tab === 'settings' ? 'on' : ''} href="#/settings"><${Icon} name="settings" /><span>Settings</span></a>
     </nav>
     ${sheet && html`<${Sheet} sheet=${sheet} />`}
@@ -1002,6 +1133,7 @@ async function main() {
   render(html`<${App} />`, document.getElementById('app'));
   setTimeout(hideSplash, Math.max(0, SPLASH_MIN_MS - (performance.now() - started)));
   sync.startSync();
+  priceHistory.startDailyRefresh({ store, api: { priceKey, getPrices, getRates }, valueOf, sumCurrency });
 
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator && window.isSecureContext) {
@@ -1009,6 +1141,6 @@ async function main() {
   }
 }
 
-export { openSheet, toast, go, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName };
+export { askOldToSwaps, openSheet, toast, go, CardImage, LangPicker, LangBadge, RarityChip, CardDetails, setLine, Icon, speciesName };
 
 main();

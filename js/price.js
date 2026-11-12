@@ -3,6 +3,7 @@
 import { html, useEffect, useRef, useState } from '../vendor/preact-htm.js';
 import { getPrices, peekPrices, getRates, getManyPrices } from './api.js';
 import { useSettings } from './store.js';
+import { cardChange, useHistory } from './history.js';
 
 let ratesCache = null;
 getRates().then((r) => { ratesCache = r; });
@@ -116,7 +117,19 @@ export function usePrices(id, enabled = true) {
 }
 
 // Compact price for list rows; only fetches once scrolled into view.
-export function PriceTag({ id, lang }) {
+// ▲ 12% / ▼ 8%: how a card's price has moved lately (only shown for moves of 5% or more).
+export function ChangeBadge({ id, p, days = 30, always = false }) {
+  const settings = useSettings();
+  useHistory();
+  const c = cardChange(id, p, settings.priceSource, days);
+  if (!c || (!always && Math.abs(c.pct) < 5)) return null;
+  const up = c.pct >= 0;
+  const pct = Math.abs(c.pct) >= 10 ? Math.round(Math.abs(c.pct)) : Math.abs(c.pct).toFixed(1).replace(/\.0$/, '');
+  const when = c.kind === 'history' ? `in the last ${c.since} days` : 'this week compared with the month';
+  return html`<span class=${`change ${up ? 'up' : 'down'}`} title=${`${up ? 'Up' : 'Down'} ${pct}% ${when}`}>${up ? '▲' : '▼'} ${pct}%</span>`;
+}
+
+export function PriceTag({ id, lang, cat }) {
   const ref = useRef(null);
   const visible = useVisible(ref);
   const settings = useSettings();
@@ -128,15 +141,15 @@ export function PriceTag({ id, lang }) {
   else if (p.error) body = html`<span class="muted">no price</span>`;
   else {
     const h = headline(p, settings.priceSource);
-    body = h ? html`<b>${fmt(h.amount, h.unit, settings.currency, rates)[0]}</b>` : html`<span class="muted">no price</span>`;
+    body = h ? html`<b>${fmt(h.amount, h.unit, settings.currency, rates)[0]}</b><${ChangeBadge} id=${id} p=${p} />` : html`<span class="muted">no price</span>`;
   }
-  return html`<span class="price-tag" ref=${ref} title=${lang && lang !== 'EN' ? 'Price is for the English card' : ''}>${body}</span>`;
+  return html`<span class="price-tag" ref=${ref} title=${lang && lang !== 'EN' && !cat ? 'Price is for the English card' : ''}>${body}</span>`;
 }
 
 // Full price breakdown for the card sheet.
 const EBAY = { GBP: 'www.ebay.co.uk', AUD: 'www.ebay.com.au', CAD: 'www.ebay.ca', EUR: 'www.ebay.de' };
 
-export function PriceBlock({ id, lang, name, query }) {
+export function PriceBlock({ id, lang, name, query, cat }) {
   const settings = useSettings();
   const rates = useRates(settings.currency);
   const p = usePrices(id, true);
@@ -163,7 +176,9 @@ export function PriceBlock({ id, lang, name, query }) {
         ${p.tp.rev ? html`<br/>Reverse holo ${f(p.tp.rev, p.tp.unit)}` : ''}
       </td></tr>`}
     </table>
-    ${lang && lang !== 'EN' ? html`<div class="note">⚠️ These prices are for the <b>English</b> card. ${lang === 'JP' ? 'Japanese' : 'Korean'} versions usually sell for a different (often lower) price.</div>` : ''}
+    ${cat ? html`<div class="note ok-note">✓ Prices for this ${cat === 'ko' ? 'Korean' : 'Japanese'} card (Cardmarket / TCGplayer).</div>`
+      : lang && lang !== 'EN' ? html`<div class="note">⚠️ These prices are for the <b>English</b> card. ${lang === 'JP' ? 'Japanese' : 'Korean'} versions usually sell for a different (often lower) price.
+          ${lang === 'JP' ? html` Pick the actual Japanese card (switch to <b>Japanese cards</b> in the card list) for its real price.` : ''}</div>` : ''}
     <div class="muted small links">
       ${p.updated ? `Updated ${new Date(p.updated).toLocaleDateString()}${p.stale ? ' (saved copy – offline)' : ''} · ` : ''}
       ${p.tp?.productId ? html`<a href=${`https://www.tcgplayer.com/product/${p.tp.productId}`} target="_blank" rel="noopener">TCGplayer</a> · ` : ''}

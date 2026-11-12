@@ -19,7 +19,7 @@ There's no build step: plain HTML/CSS/JS ES modules, with Preact + htm vendored 
 
 ## Test version
 
-The `test` branch is published at https://jaygit88.github.io/UpgraDex/test/ as **UpgraDex Test**, which installs next to the real app and keeps its own data. Changes go to `test` first, then to `main` once they've been tried.
+The `test` branch is published at https://upgradex.jay-tuck1988.workers.dev/test/ as **UpgraDex Test**, which installs next to the real app and keeps its own data. Changes go to `test` first, then to `main` once they've been tried.
 
 ## Data sources
 
@@ -29,6 +29,10 @@ The `test` branch is published at https://jaygit88.github.io/UpgraDex/test/ as *
 
 Some cards have no picture on TCGdex. `data/extra-images.json` maps those to pictures on pokemontcg.io
 (rebuild with `node scripts/build-extra-images.mjs`).
+
+Japanese (and the few Korean) cards come from TCGdex's Japanese/Korean catalogues, indexed by Pokémon in
+`data/cards-ja.json` / `data/sets-ja.json` (rebuild with `node scripts/build-intl.mjs`). They have their own
+Cardmarket/TCGplayer prices.
 
 To refresh `data/pokedex.json` and `data/sets.json` (e.g. when new sets or Pokémon come out):
 
@@ -46,11 +50,15 @@ Then open http://localhost:8080.
 
 ## Hosting
 
-The app is static files only. `.github/workflows/pages.yml` publishes it to GitHub Pages whenever `main` or `test` changes
-(one-off: repo *Settings → Pages → Source: GitHub Actions*):
+The app is static files only, served by a Cloudflare Worker. `.github/workflows/site.yml` rebuilds and publishes it
+whenever `main` or `test` changes (it packs the files into the worker with `scripts/pack-site.py`; it needs the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets the scanner also uses):
 
-- **Real app** (from `main`): https://jaygit88.github.io/UpgraDex/app/. The old address https://jaygit88.github.io/UpgraDex/ forwards there (see `site-root/`).
-- **UpgraDex Test** (from `test`): https://jaygit88.github.io/UpgraDex/test/
+- **Real app** (from `main`): https://upgradex.jay-tuck1988.workers.dev/app/ (the site root forwards there, see `site-root/`).
+- **UpgraDex Test** (from `test`): https://upgradex.jay-tuck1988.workers.dev/test/
+
+The old GitHub Pages copy (https://jaygit88.github.io/UpgraDex/) is no longer updated; it's only there so a collection
+saved on it can be backed up and moved across.
 
 The two sit side by side rather than one inside the other, so Android never confuses the two installed apps.
 
